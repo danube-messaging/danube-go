@@ -9,7 +9,7 @@ service ProducerService {
     rpc CreateProducer(ProducerRequest) returns (ProducerResponse);
 
     // Sends a message from the Producer
-    rpc SendMessage(MessageRequest) returns (MessageResponse);
+    rpc SendMessage(StreamMessage) returns (MessageResponse);
 }
 
 enum ProducerAccessMode {
@@ -17,13 +17,45 @@ enum ProducerAccessMode {
     Exclusive = 1; // exclusive access for producer
 }
 
+// The persistent storage backend for the topic
+enum StorageBackend {
+    IN_MEMORY = 0;
+    DISK = 1;
+    S3 = 2;
+}
+
+enum DispatchStrategy {
+    NonReliable = 0;
+    Reliable = 1;
+}
+
+enum RetentionPolicy {
+    RetainUntilAck = 0;
+    RetainUntilExpire = 1;
+}
+
+message ReliableOptions {
+    uint64 segment_size = 1; // in bytes
+    StorageBackend storage_backend = 2; // IN_MEMORY, DISK or S3
+    string storage_path = 3; // used for Disk or S3 storage backend
+    RetentionPolicy retention_policy = 4; // RetainUntilAck or RetainUntilExpire
+    uint64 retention_period = 5; // in seconds
+}
+
+// Message representing topic retention strategy
+message TopicDispatchStrategy {
+    DispatchStrategy strategy = 1; // NonReliable or Reliable
+    ReliableOptions reliable_options = 2; // options for Reliable dispatch strategy
+}
+
 // Create Producer request
 message ProducerRequest { 
     uint64 request_id = 1;
-    string producer_name = 3;
-    string topic_name = 4;
-    Schema schema = 5;
-    ProducerAccessMode producer_access_mode = 6;
+    string producer_name = 2;
+    string topic_name = 3;
+    Schema schema = 4;
+    ProducerAccessMode producer_access_mode = 5;
+    TopicDispatchStrategy dispatch_strategy = 6;
 }
 
 // Create Producer response
@@ -32,29 +64,6 @@ message ProducerResponse {
     uint64 producer_id = 2;
     string producer_name = 3;
 } 
-
-// Producer send the message
-message MessageRequest {
-    // Unique ID for tracking the message request
-    uint64 request_id =1;
-    // Identifies the producer, associated with a unique topic
-    uint64 producer_id = 2;
-    // The actual payload of the message
-    bytes payload = 3;
-    // Optional metadata for additional context
-    MessageMetadata metadata = 4;
-}
-
-message MessageMetadata {
-    // Optional, identifies the producer’s name
-    string producer_name = 1;
-    // Optional, useful for maintaining order and deduplication 
-    uint64 sequence_id = 2;
-    // Optional, timestamp for when the message was published
-    uint64 publish_time = 3;
-    // Optional, user-defined properties/attributes
-    map<string, string> attributes = 4;
-}
 
 // Producer receive acknowledge for the sent message
 message MessageResponse {
@@ -91,31 +100,57 @@ message ConsumerRequest {
 
 // Create Consumer response
 message ConsumerResponse {
-    uint64 request_id =1;
+    uint64 request_id = 1;
     uint64 consumer_id = 2;
     string consumer_name = 3;
 }
 
 message ReceiveRequest {
-    uint64 request_id =1;
+    uint64 request_id = 1;
     uint64 consumer_id = 2;
 }
 
+// The message that is sent by producer to topic and then to consumer
 message StreamMessage {
     // Unique ID for tracking the message request
     uint64 request_id = 1;
+    // Identifies the message, associated with a unique topic, subscription and the broker
+    MsgID msg_id = 2;
     // The actual payload of the message
-    bytes payload = 2;
-    // Optional metadata for additional context
-    MessageMetadata metadata = 3; 
+    bytes payload = 3;
+    // Timestamp for when the message was published
+    uint64 publish_time = 4;
+    // Identifies the producer’s name
+    string producer_name = 5;
+    // Subscription name the consumer is subscribed to
+    string subscription_name = 6;
+    // User-defined properties/attributes
+    map<string, string> attributes = 7;
+    
+}
+
+// Unique ID of the message
+message MsgID {
+    //  Unique sequnce ID for tracking the order of the message
+    uint64 sequence_id = 1;
+    // Identifies the producer, associated with a unique topic
+    uint64 producer_id = 2;
+    // Topic name the message is published to
+    string topic_name = 3;
+    // Broker address
+    string broker_addr = 4;
 }
 
 message AckRequest {
-    uint64 request_id =1; 
+    uint64 request_id = 1;
+    // Identifies the message, associated with a unique topic, subscription and the broker
+    MsgID msg_id = 2; 
+    // Subscription name the consumer is subscribed to
+    string subscription_name = 3;
 }
 
 message AckResponse {
-    uint64 request_id =1;
+    uint64 request_id = 1;
 }
 
 // ============================================================================================
