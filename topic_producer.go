@@ -154,18 +154,21 @@ func (p *topicProducer) send(ctx context.Context, data []byte, attributes map[st
 
 	publishTime := uint64(time.Now().UnixNano() / int64(time.Millisecond))
 
-	metaData := &proto.MessageMetadata{
-		ProducerName: p.producerName,
-		SequenceId:   p.messageSequenceID.Add(1),
-		PublishTime:  publishTime,
-		Attributes:   attributes,
+	msgID := &proto.MsgID{
+		SequenceId: p.messageSequenceID.Add(1),
+		ProducerId: p.producerID,
+		TopicName:  p.topic,
+		BrokerAddr: p.client.URI,
 	}
 
-	req := &proto.MessageRequest{
-		RequestId:  p.requestID.Add(1),
-		ProducerId: p.producerID,
-		Metadata:   metaData,
-		Payload:    data,
+	req := &proto.StreamMessage{
+		RequestId:        p.requestID.Add(1),
+		MsgId:            msgID,
+		Payload:          data,
+		PublishTime:      publishTime,
+		ProducerName:     p.producerName,
+		SubscriptionName: "",
+		Attributes:       attributes,
 	}
 
 	if p.streamClient == nil {
