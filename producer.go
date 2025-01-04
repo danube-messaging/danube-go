@@ -18,7 +18,7 @@ type Producer struct {
 	producerName      string                  // Name assigned to the producer instance.
 	partitions        int32                   // The number of partitions for the topic
 	messageRouter     *MessageRouter          // The way the messages will be delivered to consumers
-	producers         []topicProducer         // All the underhood producers, for sending messages to topic partitions
+	producers         []*topicProducer        // All the underhood producers, for sending messages to topic partitions
 	producerOptions   ProducerOptions         // Options that configure the behavior of the producer.
 }
 
@@ -81,14 +81,14 @@ func (p *Producer) Create(ctx context.Context) error {
 			return err
 		}
 
-		p.producers = append(p.producers, topicProducer)
+		p.producers = append(p.producers, &topicProducer)
 
 	} else {
 		if p.messageRouter == nil {
 			p.messageRouter = &MessageRouter{partitions: p.partitions}
 		}
 
-		producers := make([]topicProducer, p.partitions)
+		producers := make([]*topicProducer, p.partitions)
 		errChan := make(chan error, p.partitions)
 		doneChan := make(chan struct{}, p.partitions)
 
@@ -119,7 +119,7 @@ func (p *Producer) Create(ctx context.Context) error {
 					return
 				}
 
-				producers[partitionID] = topicProducer
+				producers[partitionID] = &topicProducer
 			}(partitionID)
 		}
 

@@ -25,12 +25,12 @@ const (
 type Consumer struct {
 	mu               sync.Mutex
 	client           *DanubeClient
-	topicName        string                   // the name of the topic that the consumer subscribes to
-	consumerName     string                   // the name assigned to the consumer instance
-	consumers        map[string]topicConsumer // the map between the partitioned topic name and the consumer instance
-	subscription     string                   // the name of the subscription for the consumer
-	subscriptionType SubType                  // the type of subscription (e.g., EXCLUSIVE, SHARED, FAILOVER)
-	consumerOptions  ConsumerOptions          // configuration options for the consumer
+	topicName        string                    // the name of the topic that the consumer subscribes to
+	consumerName     string                    // the name assigned to the consumer instance
+	consumers        map[string]*topicConsumer // the map between the partitioned topic name and the consumer instance
+	subscription     string                    // the name of the subscription for the consumer
+	subscriptionType SubType                   // the type of subscription (e.g., EXCLUSIVE, SHARED, FAILOVER)
+	consumerOptions  ConsumerOptions           // configuration options for the consumer
 }
 
 func newConsumer(
@@ -75,7 +75,7 @@ func (c *Consumer) Subscribe(ctx context.Context) error {
 	}
 
 	// Initialize the consumers map
-	consumers := make(map[string]topicConsumer)
+	consumers := make(map[string]*topicConsumer)
 
 	// Channels to collect errors and results
 	errChan := make(chan error, len(partitions))
@@ -102,7 +102,7 @@ func (c *Consumer) Subscribe(ctx context.Context) error {
 				return
 			}
 
-			consumers[partition] = tc
+			consumers[partition] = &tc
 		}()
 	}
 
