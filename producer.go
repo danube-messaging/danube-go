@@ -10,15 +10,16 @@ import (
 // messages to a specific partitioned or non-partitioned topic on a message broker.
 // It handles producer creation, message sending, and maintains the producer's state.
 type Producer struct {
-	mu              sync.Mutex
-	client          *DanubeClient
-	topicName       string          // name of the topic to which the producer sends messages.
-	schema          *Schema         // The schema that defines the structure of the messages being produced.
-	producerName    string          // name assigned to the producer instance.
-	partitions      int32           // The number of partitions for the topic
-	messageRouter   *MessageRouter  // the way the messages will be delivered to consumers
-	producers       []topicProducer // all the underhood producers, for sending messages to topic partitions
-	producerOptions ProducerOptions // Options that configure the behavior of the producer.
+	mu                sync.Mutex
+	client            *DanubeClient
+	topicName         string                  // Name of the topic to which the producer sends messages.
+	schema            *Schema                 // The schema that defines the structure of the messages being produced.
+	dispatch_strategy *ConfigDispatchStrategy // The way the messages will be delivered to consumers
+	producerName      string                  // Name assigned to the producer instance.
+	partitions        int32                   // The number of partitions for the topic
+	messageRouter     *MessageRouter          // The way the messages will be delivered to consumers
+	producers         []topicProducer         // All the underhood producers, for sending messages to topic partitions
+	producerOptions   ProducerOptions         // Options that configure the behavior of the producer.
 }
 
 func newProducer(
@@ -27,6 +28,7 @@ func newProducer(
 	partitions int32,
 	producerName string,
 	schema *Schema,
+	dispatch_strategy *ConfigDispatchStrategy,
 	producerOptions ProducerOptions,
 ) *Producer {
 
@@ -35,14 +37,19 @@ func newProducer(
 		schema = &Schema{Name: "string_schema", TypeSchema: SchemaType_STRING}
 	}
 
+	if dispatch_strategy == nil {
+		dispatch_strategy = NewConfigDispatchStrategy()
+	}
+
 	return &Producer{
-		client:          client,
-		topicName:       topicName,
-		schema:          schema,
-		producerName:    producerName,
-		partitions:      partitions, // 0 for non-partitioned
-		messageRouter:   nil,
-		producerOptions: producerOptions,
+		client:            client,
+		topicName:         topicName,
+		schema:            schema,
+		dispatch_strategy: dispatch_strategy,
+		producerName:      producerName,
+		partitions:        partitions, // 0 for non-partitioned
+		messageRouter:     nil,
+		producerOptions:   producerOptions,
 	}
 }
 
@@ -65,6 +72,7 @@ func (p *Producer) Create(ctx context.Context) error {
 			p.topicName,
 			p.producerName,
 			p.schema,
+			p.dispatch_strategy,
 			p.producerOptions,
 		)
 
@@ -100,6 +108,7 @@ func (p *Producer) Create(ctx context.Context) error {
 					topicName,
 					producerName,
 					p.schema,
+					p.dispatch_strategy,
 					p.producerOptions,
 				)
 

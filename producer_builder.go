@@ -5,12 +5,13 @@ import "fmt"
 // ProducerBuilder is a builder for creating a new Producer instance. It allows
 // setting various properties for the producer such as topic, name, schema, and options.
 type ProducerBuilder struct {
-	client          *DanubeClient
-	topic           string
-	producerName    string
-	partitions      int32
-	schema          *Schema
-	producerOptions ProducerOptions
+	client            *DanubeClient
+	topic             string
+	producerName      string
+	partitions        int32
+	schema            *Schema
+	dispatch_strategy *ConfigDispatchStrategy
+	producerOptions   ProducerOptions
 }
 
 func newProducerBuilder(client *DanubeClient) *ProducerBuilder {
@@ -49,6 +50,16 @@ func (pb *ProducerBuilder) WithName(producerName string) *ProducerBuilder {
 // - schemaData: The data or definition of the schema only if it is SchemaType_JSON
 func (pb *ProducerBuilder) WithSchema(schemaName string, schemaType SchemaType, schemaData string) *ProducerBuilder {
 	pb.schema = NewSchema(schemaName, schemaType, schemaData)
+	return pb
+}
+
+// WithDispatchStrategy sets the dispatch strategy for the producer.
+// This method configures the retention strategy for the producer, which determines how messages are stored and managed.
+//
+// Parameters:
+// - dispatch_strategy: The dispatch strategy for the producer.
+func (pb *ProducerBuilder) WithDispatchStrategy(dispatch_strategy *ConfigDispatchStrategy) *ProducerBuilder {
+	pb.dispatch_strategy = dispatch_strategy
 	return pb
 }
 
@@ -91,6 +102,7 @@ func (pb *ProducerBuilder) Build() (*Producer, error) {
 		pb.partitions,
 		pb.producerName,
 		pb.schema,
+		pb.dispatch_strategy,
 		pb.producerOptions,
 	), nil
 }
