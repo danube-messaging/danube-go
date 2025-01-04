@@ -45,5 +45,9 @@ func main() {
 
 		fmt.Printf("Received message: %+v\n", string(msg.GetPayload()))
 
+		if _, err := consumer.Ack(ctx, msg); err != nil {
+			log.Fatalf("Failed to acknowledge message: %v", err)
+		}
+
 	}
 }

@@ -84,12 +84,16 @@ if err != nil {
 for msg := range stream {
     fmt.Printf("Received message: %+v\n", string(msg.GetPayload()))
 
+    // Acknowledge the message
+    if _, err := consumer.Ack(ctx, msg); err != nil {
+        log.Fatalf("Failed to acknowledge message: %v", err)
+    }
 }
 ```
 
 ## Contribution
 
-I'm working on improving and adding new features. Please feel free to contribute or report any issues you encounter.
+Working on improving and adding new features. Please feel free to contribute or report any issues you encounter.
 
 ### Use latest DanubeApi.proto file
 

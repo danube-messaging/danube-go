@@ -24,6 +24,7 @@ type topicProducer struct {
 	requestID         atomic.Uint64               // atomic counter for generating unique request IDs.
 	messageSequenceID atomic.Uint64               // atomic counter for generating unique message sequence IDs.
 	schema            *Schema                     // The schema that defines the structure of the messages being produced.
+	dispatch_strategy *ConfigDispatchStrategy     // The way the messages will be delivered to consumers
 	producerOptions   ProducerOptions             // Options that configure the behavior of the producer.
 	streamClient      proto.ProducerServiceClient // gRPC client used for communication with the message broker.
 	stopSignal        *atomic.Bool                // An atomic boolean signal used to indicate if the producer should stop.
@@ -34,6 +35,7 @@ func newTopicProducer(
 	topic string,
 	producerName string,
 	schema *Schema,
+	dispatch_strategy *ConfigDispatchStrategy,
 	producerOptions ProducerOptions,
 ) topicProducer {
 	return topicProducer{
@@ -44,6 +46,7 @@ func newTopicProducer(
 		requestID:         atomic.Uint64{},
 		messageSequenceID: atomic.Uint64{},
 		schema:            schema,
+		dispatch_strategy: dispatch_strategy,
 		producerOptions:   producerOptions,
 		streamClient:      nil,
 		stopSignal:        &atomic.Bool{},
@@ -74,6 +77,7 @@ func (p *topicProducer) create(ctx context.Context) (uint64, error) {
 		TopicName:          p.topic,
 		Schema:             p.schema.ToProto(),
 		ProducerAccessMode: proto.ProducerAccessMode_Shared,
+		DispatchStrategy:   p.dispatch_strategy.ToProtoDispatchStrategy(),
 	}
 
 	maxRetries := 4
@@ -154,18 +158,21 @@ func (p *topicProducer) send(ctx context.Context, data []byte, attributes map[st
 
 	publishTime := uint64(time.Now().UnixNano() / int64(time.Millisecond))
 
-	metaData := &proto.MessageMetadata{
-		ProducerName: p.producerName,
-		SequenceId:   p.messageSequenceID.Add(1),
-		PublishTime:  publishTime,
-		Attributes:   attributes,
+	msgID := &proto.MsgID{
+		SequenceId: p.messageSequenceID.Add(1),
+		ProducerId: p.producerID,
+		TopicName:  p.topic,
+		BrokerAddr: p.client.URI,
 	}
 
-	req := &proto.MessageRequest{
-		RequestId:  p.requestID.Add(1),
-		ProducerId: p.producerID,
-		Metadata:   metaData,
-		Payload:    data,
+	req := &proto.StreamMessage{
+		RequestId:        p.requestID.Add(1),
+		MsgId:            msgID,
+		Payload:          data,
+		PublishTime:      publishTime,
+		ProducerName:     p.producerName,
+		SubscriptionName: "",
+		Attributes:       attributes,
 	}
 
 	if p.streamClient == nil {

@@ -16,8 +16,8 @@ func main() {
 
 	ctx := context.Background()
 	topic := "/default/partitioned_topic"
-	consumerName := "consumer_string"
-	subscriptionName := "subscription_string"
+	consumerName := "consumer_part"
+	subscriptionName := "subscription_part"
 	subType := danube.Exclusive
 
 	consumer, err := client.NewConsumer(ctx).
@@ -44,6 +44,9 @@ func main() {
 	for msg := range stream {
 
 		fmt.Printf("Received message: %+v\n", string(msg.GetPayload()))
+		if _, err := consumer.Ack(ctx, msg); err != nil {
+			log.Fatalf("Failed to acknowledge message: %v", err)
+		}
 
 	}
 }

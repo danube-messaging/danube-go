@@ -25,12 +25,12 @@ const (
 type Consumer struct {
 	mu               sync.Mutex
 	client           *DanubeClient
-	topicName        string          // the name of the topic that the consumer subscribes to
-	consumerName     string          // the name assigned to the consumer instance
-	consumers        []topicConsumer // the under the hood consumers for partitioned topics
-	subscription     string          // the name of the subscription for the consumer
-	subscriptionType SubType         // the type of subscription (e.g., EXCLUSIVE, SHARED, FAILOVER)
-	consumerOptions  ConsumerOptions // configuration options for the consumer
+	topicName        string                    // the name of the topic that the consumer subscribes to
+	consumerName     string                    // the name assigned to the consumer instance
+	consumers        map[string]*topicConsumer // the map between the partitioned topic name and the consumer instance
+	subscription     string                    // the name of the subscription for the consumer
+	subscriptionType SubType                   // the type of subscription (e.g., EXCLUSIVE, SHARED, FAILOVER)
+	consumerOptions  ConsumerOptions           // configuration options for the consumer
 }
 
 func newConsumer(
@@ -74,12 +74,14 @@ func (c *Consumer) Subscribe(ctx context.Context) error {
 		return err
 	}
 
+	// Initialize the consumers map
+	consumers := make(map[string]*topicConsumer)
+
 	// Channels to collect errors and results
 	errChan := make(chan error, len(partitions))
 	doneChan := make(chan struct{}, len(partitions))
 
 	// Create and subscribe to topicConsumer
-	var consumers []topicConsumer
 	for _, partition := range partitions {
 		partition := partition
 		go func() {
@@ -100,7 +102,7 @@ func (c *Consumer) Subscribe(ctx context.Context) error {
 				return
 			}
 
-			consumers = append(consumers, tc)
+			consumers[partition] = &tc
 		}()
 	}
 
@@ -184,4 +186,11 @@ func (c *Consumer) Receive(ctx context.Context) (chan *proto.StreamMessage, erro
 	}()
 
 	return msgChan, nil
+}
+
+// Ack acknowledges a received message.
+func (c *Consumer) Ack(ctx context.Context, message *proto.StreamMessage) (*proto.AckResponse, error) {
+	topic_name := message.GetMsgId().GetTopicName()
+	topic_consumer := c.consumers[topic_name]
+	return topic_consumer.sendAck(ctx, message.GetRequestId(), message.GetMsgId(), c.subscription)
 }
