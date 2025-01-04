@@ -74,12 +74,14 @@ func (c *Consumer) Subscribe(ctx context.Context) error {
 		return err
 	}
 
+	// Initialize the consumers map
+	consumers := make(map[string]topicConsumer)
+
 	// Channels to collect errors and results
 	errChan := make(chan error, len(partitions))
 	doneChan := make(chan struct{}, len(partitions))
 
 	// Create and subscribe to topicConsumer
-	var consumers map[string]topicConsumer
 	for _, partition := range partitions {
 		partition := partition
 		go func() {
