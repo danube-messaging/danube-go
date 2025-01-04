@@ -55,6 +55,9 @@ func main() {
 			log.Printf("Failed to decode message: %v", err)
 		} else {
 			fmt.Printf("Received message: %+v\n", myMessage)
+			if _, err := consumer.Ack(ctx, msg); err != nil {
+				log.Fatalf("Failed to acknowledge message: %v", err)
+			}
 		}
 	}
 }

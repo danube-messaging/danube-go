@@ -138,6 +138,21 @@ func (c *topicConsumer) receive(ctx context.Context) (proto.ConsumerService_Rece
 	return c.streamClient.ReceiveMessages(ctx, req)
 }
 
+// sendAck sends an acknowledgement for a message to the broker.
+func (c *topicConsumer) sendAck(ctx context.Context, req_id uint64, msg_id *proto.MsgID, subscription_name string) (*proto.AckResponse, error) {
+	if c.streamClient == nil {
+		return nil, errors.New("stream client not initialized")
+	}
+
+	ack_req := &proto.AckRequest{
+		RequestId:        req_id,
+		MsgId:            msg_id,
+		SubscriptionName: subscription_name,
+	}
+
+	return c.streamClient.Ack(ctx, ack_req)
+}
+
 func (c *topicConsumer) connect(addr string) error {
 	conn, err := c.client.connectionManager.getConnection(addr, addr)
 	if err != nil {
