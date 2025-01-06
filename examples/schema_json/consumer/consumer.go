@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/danrusei/danube-go"
+	"github.com/danube-messaging/danube-go"
 )
 
 type MyMessage struct {

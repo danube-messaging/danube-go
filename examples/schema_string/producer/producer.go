@@ -6,7 +6,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/danrusei/danube-go"
+	"github.com/danube-messaging/danube-go"
 )
 
 func main() {

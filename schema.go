@@ -3,7 +3,7 @@ package danube
 import (
 	"fmt"
 
-	"github.com/danrusei/danube-go/proto"
+	"github.com/danube-messaging/danube-go/proto"
 )
 
 // SchemaType represents the type of schema used for data serialization and validation.

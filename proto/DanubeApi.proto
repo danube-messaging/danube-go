@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package danube;
 
-option go_package = "github.com/danrusei/danube-go/proto";
+option go_package = "github.com/danube-messaging/danube-go/proto";
 
 service ProducerService {
     // Creates a new Producer on a topic

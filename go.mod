@@ -1,4 +1,4 @@
-module github.com/danrusei/danube-go
+module github.com/danube-messaging/danube-go
 
 go 1.23.0
 

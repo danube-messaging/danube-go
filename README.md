@@ -1,16 +1,16 @@
 # Danube-go client
 
-The Go Client library for interacting with Danube Pub/Sub messaging platform.
+The Go Client library for interacting with Danube Messaging Broker platform.
 
-[Danube](https://github.com/danrusei/danube) is an open-source **distributed** Pub/Sub messaging platform written in Rust. Consult [the documentation](https://dev-state.com/danube_docs/) for supported concepts and the platform architecture.
+[Danube](https://github.com/danube-messaging/danube) is an open-source **distributed** Messaging platform written in Rust. Consult [the documentation](https://danube-docs.dev-state.com/) for supported concepts and the platform architecture.
 
 ## Example usage
 
-Check out the [example files](https://github.com/danrusei/danube-go/tree/main/examples).
+Check out the [example files](https://github.com/danube-messaging/danube-go/tree/main/examples).
 
 ### Start the Danube server
 
-Use the [instructions from the documentation](https://dev-state.com/danube_docs/) to run the Danube broker/cluster.
+Use the [instructions from the documentation](https://danube-docs.dev-state.com/) to run the Danube broker/cluster.
 
 ### Create Producer
 
@@ -97,12 +97,12 @@ Working on improving and adding new features. Please feel free to contribute or 
 
 ### Use latest DanubeApi.proto file
 
-Make sure the proto/DanubeApi.proto is the latest from [Danube project](https://github.com/danrusei/danube/tree/main/proto).
+Make sure the proto/DanubeApi.proto is the latest from [Danube project](https://github.com/danube-messaging/danube/tree/main/proto).
 
 If not replace the file and add at the top of the file
 
 ```bash
-option go_package = "github.com/danrusei/danube-go/proto";
+option go_package = "github.com/danube-messaging/danube-go/proto";
 ```
 
 right after the `package danube;`

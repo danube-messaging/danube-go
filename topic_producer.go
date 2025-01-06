@@ -8,7 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/danrusei/danube-go/proto"
+	"github.com/danube-messaging/danube-go/proto"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )

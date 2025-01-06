@@ -1,7 +1,7 @@
 package danube
 
 import (
-	"github.com/danrusei/danube-go/proto"
+	"github.com/danube-messaging/danube-go/proto"
 )
 
 // ConfigDispatchStrategy represents the dispatch strategy for a topic

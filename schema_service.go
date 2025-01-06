@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/danrusei/danube-go/proto" // Path to your generated proto package
+	"github.com/danube-messaging/danube-go/proto" // Path to your generated proto package
 )
 
 // SchemaService is used to interact with the schema service

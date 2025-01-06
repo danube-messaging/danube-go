@@ -5,7 +5,7 @@ import (
 	"errors"
 	"sync/atomic"
 
-	"github.com/danrusei/danube-go/proto" // Path to your generated proto package
+	"github.com/danube-messaging/danube-go/proto" // Path to your generated proto package
 )
 
 // LookupResult holds the result of a topic lookup

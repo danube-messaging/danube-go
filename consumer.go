@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/danrusei/danube-go/proto"
+	"github.com/danube-messaging/danube-go/proto"
 )
 
 // the type of subscription (e.g., EXCLUSIVE, SHARED, FAILOVER)

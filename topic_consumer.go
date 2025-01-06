@@ -8,7 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/danrusei/danube-go/proto"
+	"github.com/danube-messaging/danube-go/proto"
 )
 
 // topicConsumer represents a message consumer that subscribes to a topic or topic partition and receives messages.

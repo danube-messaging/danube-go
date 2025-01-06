@@ -6,7 +6,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/danrusei/danube-go/proto" // Path to your generated proto package
+	"github.com/danube-messaging/danube-go/proto" // Path to your generated proto package
 )
 
 type healthCheckService struct {
