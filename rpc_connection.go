@@ -2,11 +2,11 @@ package danube
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"strings"
 	"time"
 
-	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/keepalive"
@@ -58,7 +58,7 @@ func newRpcConnection(connectURL string, options ...DialOption) (*rpcConnection,
 
 	conn, err := grpc.NewClient(url_trimmed, dialOptions...)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to connect")
+		return nil, fmt.Errorf("failed to connect: %w", err)
 	}
 	return &rpcConnection{grpcConn: conn}, nil
 }
