@@ -97,7 +97,7 @@ Working on improving and adding new features. Please feel free to contribute or 
 
 ### Use latest DanubeApi.proto file
 
-Make sure the proto/DanubeApi.proto is the latest from [Danube project](https://github.com/danube-messaging/danube/tree/main/proto).
+Make sure the proto/DanubeApi.proto is the latest from [Danube project](https://github.com/danube-messaging/danube/tree/main/danube-core/proto).
 
 If not replace the file and add at the top of the file
 

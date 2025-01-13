@@ -22,7 +22,6 @@ func main() {
 	// For reliable strategy
 	reliableOpts := danube.NewReliableOptions(
 		10, // 10MB segment size
-		danube.StorageType{Type: danube.InMemory, Location: "/path/to/storage"},
 		danube.RetainUntilExpire,
 		3600, // retention period in seconds
 	)
