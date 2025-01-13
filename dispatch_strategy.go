@@ -14,16 +14,14 @@ type ConfigDispatchStrategy struct {
 // ReliableOptions represents configuration options for reliable dispatch strategy
 type ReliableOptions struct {
 	SegmentSize     int64
-	StorageType     StorageType
 	RetentionPolicy RetentionPolicy
 	RetentionPeriod uint64
 }
 
 // NewReliableOptions creates a new ReliableOptions instance
-func NewReliableOptions(segmentSize int64, storageType StorageType, retentionPolicy RetentionPolicy, retentionPeriod uint64) *ReliableOptions {
+func NewReliableOptions(segmentSize int64, retentionPolicy RetentionPolicy, retentionPeriod uint64) *ReliableOptions {
 	return &ReliableOptions{
 		SegmentSize:     segmentSize,
-		StorageType:     storageType,
 		RetentionPolicy: retentionPolicy,
 		RetentionPeriod: retentionPeriod,
 	}
@@ -35,21 +33,6 @@ type RetentionPolicy int
 const (
 	RetainUntilAck RetentionPolicy = iota
 	RetainUntilExpire
-)
-
-// StorageType represents the storage type for messages in the topic
-type StorageType struct {
-	Type     StorageTypeEnum
-	Location string // Used for Disk path or S3 bucket name
-}
-
-// StorageTypeEnum represents the type of storage
-type StorageTypeEnum int
-
-const (
-	InMemory StorageTypeEnum = iota
-	Disk
-	S3
 )
 
 // NewConfigDispatchStrategy creates a new ConfigDispatchStrategy instance
@@ -76,22 +59,6 @@ func (c *ConfigDispatchStrategy) ToProtoDispatchStrategy() *proto.TopicDispatchS
 		}
 	}
 
-	// Handle reliable strategy
-	var storageBackend proto.StorageBackend
-	var storagePath string
-
-	switch c.ReliableOptions.StorageType.Type {
-	case InMemory:
-		storageBackend = proto.StorageBackend_IN_MEMORY
-		storagePath = ""
-	case Disk:
-		storageBackend = proto.StorageBackend_DISK
-		storagePath = c.ReliableOptions.StorageType.Location
-	case S3:
-		storageBackend = proto.StorageBackend_S3
-		storagePath = c.ReliableOptions.StorageType.Location
-	}
-
 	var retentionPolicy proto.RetentionPolicy
 	switch c.ReliableOptions.RetentionPolicy {
 	case RetainUntilAck:
@@ -104,8 +71,6 @@ func (c *ConfigDispatchStrategy) ToProtoDispatchStrategy() *proto.TopicDispatchS
 		Strategy: 1,
 		ReliableOptions: &proto.ReliableOptions{
 			SegmentSize:     uint64(c.ReliableOptions.SegmentSize),
-			StorageBackend:  storageBackend,
-			StoragePath:     storagePath,
 			RetentionPolicy: retentionPolicy,
 			RetentionPeriod: c.ReliableOptions.RetentionPeriod,
 		},
