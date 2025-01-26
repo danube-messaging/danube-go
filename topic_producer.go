@@ -22,7 +22,6 @@ type topicProducer struct {
 	producerName      string                      // name assigned to the producer instance.
 	producerID        uint64                      // The unique identifier for the producer, provided by broker
 	requestID         atomic.Uint64               // atomic counter for generating unique request IDs.
-	messageSequenceID atomic.Uint64               // atomic counter for generating unique message sequence IDs.
 	schema            *Schema                     // The schema that defines the structure of the messages being produced.
 	dispatch_strategy *ConfigDispatchStrategy     // The way the messages will be delivered to consumers
 	producerOptions   ProducerOptions             // Options that configure the behavior of the producer.
@@ -44,7 +43,6 @@ func newTopicProducer(
 		producerName:      producerName,
 		producerID:        0,
 		requestID:         atomic.Uint64{},
-		messageSequenceID: atomic.Uint64{},
 		schema:            schema,
 		dispatch_strategy: dispatch_strategy,
 		producerOptions:   producerOptions,
@@ -159,7 +157,6 @@ func (p *topicProducer) send(ctx context.Context, data []byte, attributes map[st
 	publishTime := uint64(time.Now().UnixNano() / int64(time.Millisecond))
 
 	msgID := &proto.MsgID{
-		SequenceId: p.messageSequenceID.Add(1),
 		ProducerId: p.producerID,
 		TopicName:  p.topic,
 		BrokerAddr: p.client.URI,
@@ -184,7 +181,7 @@ func (p *topicProducer) send(ctx context.Context, data []byte, attributes map[st
 		return 0, fmt.Errorf("failed to send message: %v", err)
 	}
 
-	return res.SequenceId, nil
+	return res.RequestId, nil
 }
 
 func (p *topicProducer) connect(addr string) error {
