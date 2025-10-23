@@ -19,13 +19,8 @@ func main() {
 	topic := "/default/topic_reliable"
 	producerName := "producer_reliable"
 
-	// For reliable strategy
-	reliableOpts := danube.NewReliableOptions(
-		10, // 10MB segment size
-		danube.RetainUntilExpire,
-		3600, // retention period in seconds
-	)
-	reliableStrategy := danube.NewReliableDispatchStrategy(reliableOpts)
+	// For reliable strategy (now configured at broker side)
+	reliableStrategy := danube.NewReliableDispatchStrategy()
 
 	producer, err := client.NewProducer(ctx).
 		WithName(producerName).

@@ -47,6 +47,20 @@ if err != nil {
 log.Printf("The Message with id %v was sent", messageID)
 ```
 
+### Reliable Dispatch (optional)
+
+Reliable dispatch can be enabled when creating the producer, the broker will stream the messages to the consumer from WAL and cloud storage.
+
+```go
+reliableStrategy := danube.NewReliableDispatchStrategy()
+
+producer, err := client.NewProducer(ctx).
+    WithName(producerName).
+    WithTopic(topic).
+    WithDispatchStrategy(reliableStrategy).
+    Build()
+```
+
 ### Create Consumer
 
 ```go
