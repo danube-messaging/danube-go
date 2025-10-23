@@ -42,7 +42,7 @@ func main() {
 	}
 
 	for msg := range stream {
-		fmt.Printf("Received message: %+v, from segment: %d, with offset: %d\n", string(msg.GetPayload()), msg.GetMsgId().GetSegmentId(), msg.GetMsgId().GetSegmentOffset())
+		fmt.Printf("Received message: %s, topic: %s, offset: %d\n", string(msg.GetPayload()), msg.GetMsgId().GetTopicName(), msg.GetMsgId().GetTopicOffset())
 
 		if _, err := consumer.Ack(ctx, msg); err != nil {
 			log.Fatalf("Failed to acknowledge message: %v", err)
