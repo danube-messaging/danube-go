@@ -12,7 +12,10 @@ func main() {
 	// Setup logging
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
-	client := danube.NewClient().ServiceURL("127.0.0.1:6650").Build()
+	client, err := danube.NewClient().ServiceURL("127.0.0.1:6650").Build()
+	if err != nil {
+		log.Fatalf("failed to create client: %v", err)
+	}
 
 	ctx := context.Background()
 	topic := "/default/partitioned_topic"
@@ -20,7 +23,7 @@ func main() {
 	subscriptionName := "subscription_part"
 	subType := danube.Exclusive
 
-	consumer, err := client.NewConsumer(ctx).
+	consumer, err := client.NewConsumer().
 		WithConsumerName(consumerName).
 		WithTopic(topic).
 		WithSubscription(subscriptionName).

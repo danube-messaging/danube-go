@@ -15,13 +15,16 @@ Use the [instructions from the documentation](https://danube-docs.dev-state.com/
 ### Create Producer
 
 ```go
-client := danube.NewClient().ServiceURL("127.0.0.1:6650").Build()
+client, err := danube.NewClient().ServiceURL("127.0.0.1:6650").Build()
+if err != nil {
+    log.Fatalf("Failed to create client: %v", err)
+}
 
 ctx := context.Background()
 topic := "/default/test_topic"
 producerName := "test_producer"
 
-producer, err := client.NewProducer(ctx).
+producer, err := client.NewProducer().
     WithName(producerName).
     WithTopic(topic).
     Build()
@@ -54,7 +57,7 @@ Reliable dispatch can be enabled when creating the producer, the broker will str
 ```go
 reliableStrategy := danube.NewReliableDispatchStrategy()
 
-producer, err := client.NewProducer(ctx).
+producer, err := client.NewProducer().
     WithName(producerName).
     WithTopic(topic).
     WithDispatchStrategy(reliableStrategy).
@@ -64,7 +67,10 @@ producer, err := client.NewProducer(ctx).
 ### Create Consumer
 
 ```go
-client := danube.NewClient().ServiceURL("127.0.0.1:6650").Build()
+client, err := danube.NewClient().ServiceURL("127.0.0.1:6650").Build()
+if err != nil {
+    log.Fatalf("Failed to create client: %v", err)
+}
 
 ctx := context.Background()
 topic := "/default/test_topic"
@@ -72,7 +78,7 @@ consumerName := "test_consumer"
 subscriptionName := "test_subscription"
 subType := danube.Exclusive
 
-consumer, err := client.NewConsumer(ctx).
+consumer, err := client.NewConsumer().
     WithConsumerName(consumerName).
     WithTopic(topic).
     WithSubscription(subscriptionName).
@@ -109,7 +115,7 @@ for msg := range stream {
 
 Working on improving and adding new features. Please feel free to contribute or report any issues you encounter.
 
-### Use latest DanubeApi.proto file
+### Use latest DanubeApi.proto and SchemaRegistry.proto files
 
 Make sure the proto/DanubeApi.proto is the latest from [Danube project](https://github.com/danube-messaging/danube/tree/main/danube-core/proto).
 
@@ -131,5 +137,6 @@ go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
 And generate the Go code from the proto file:
 
 ```bash
-protoc --proto_path=./proto --go_out=./proto --go-grpc_out=./proto --go_opt=paths=source_relative      --go-grpc_opt=paths=source_relative proto/DanubeApi.proto
+protoc --proto_path=./proto --go_out=./proto --go-grpc_out=./proto --go_opt=paths=source_relative --go-grpc_opt=paths=source_relative proto/DanubeApi.proto
+protoc --proto_path=./proto --go_out=./proto --go-grpc_out=./proto --go_opt=paths=source_relative --go-grpc_opt=paths=source_relative proto/SchemaRegistry.proto
 ```

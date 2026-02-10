@@ -2,13 +2,13 @@ package danube
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"log"
 	"sync/atomic"
 	"time"
 
 	"github.com/danube-messaging/danube-go/proto"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // topicConsumer represents a message consumer that subscribes to a topic or topic partition and receives messages.
@@ -24,6 +24,8 @@ type topicConsumer struct {
 	requestID        atomic.Uint64               // atomic counter for generating unique request IDs
 	streamClient     proto.ConsumerServiceClient // the gRPC client used to communicate with the consumer service
 	stopSignal       *atomic.Bool                // atomic boolean flag to indicate if the consumer should be stopped
+	brokerAddr       string
+	retryManager     RetryManager
 }
 
 func newTopicConsumer(
@@ -39,6 +41,8 @@ func newTopicConsumer(
 		subscriptionType = Shared
 	}
 
+	retryManager := NewRetryManager(options.MaxRetries, options.BaseBackoffMs, options.MaxBackoffMs)
+
 	return topicConsumer{
 		client:           client,
 		topicName:        topicName,
@@ -47,7 +51,14 @@ func newTopicConsumer(
 		subscriptionType: subscriptionType,
 		consumerOptions:  options,
 		stopSignal:       &atomic.Bool{},
+		brokerAddr:       client.URI,
+		retryManager:     retryManager,
 	}
+}
+
+// stop signals this consumer to stop background activities.
+func (c *topicConsumer) stop() {
+	c.stopSignal.Store(true)
 }
 
 // subscribe initializes the subscription to the topic and starts the health check service.
@@ -60,13 +71,31 @@ func newTopicConsumer(
 // - uint64: The unique identifier assigned to the consumer by the broker.
 // - error: An error if the subscription fails or if initialization encounters issues.
 func (c *topicConsumer) subscribe(ctx context.Context) (uint64, error) {
-	brokerAddr, err := c.client.lookupService.handleLookup(ctx, c.client.URI, c.topicName)
-	if err != nil {
-		return 0, err
-	}
+	attempts := 0
 
-	// Initialize the gRPC client connection
-	if err := c.connect(brokerAddr); err != nil {
+	for {
+		consumerID, err := c.trySubscribe(ctx)
+		if err == nil {
+			return consumerID, nil
+		}
+
+		if !c.retryManager.IsRetryable(err) {
+			return 0, err
+		}
+
+		attempts++
+		if attempts > c.retryManager.MaxRetries() {
+			return 0, err
+		}
+
+		c.lookupNewBroker(ctx)
+		backoff := c.retryManager.CalculateBackoff(attempts - 1)
+		time.Sleep(backoff)
+	}
+}
+
+func (c *topicConsumer) trySubscribe(ctx context.Context) (uint64, error) {
+	if err := c.connect(c.brokerAddr); err != nil {
 		return 0, err
 	}
 
@@ -78,20 +107,32 @@ func (c *topicConsumer) subscribe(ctx context.Context) (uint64, error) {
 		SubscriptionType: proto.ConsumerRequest_SubscriptionType(c.subscriptionType),
 	}
 
-	resp, err := c.streamClient.Subscribe(ctx, req)
+	ctxWithAuth, err := c.client.authService.attachTokenIfNeeded(ctx, c.client.connectionManager.connectionOptions.APIKey, c.brokerAddr)
 	if err != nil {
+		return 0, err
+	}
+
+	resp, err := c.streamClient.Subscribe(ctxWithAuth, req)
+	if err != nil {
+		if status.Code(err) == codes.AlreadyExists {
+			return 0, fmt.Errorf("consumer already exists: %v", err)
+		}
 		return 0, err
 	}
 
 	c.consumerID = resp.GetConsumerId()
 
-	// Start health check service
-	err = c.client.healthCheckService.StartHealthCheck(ctx, brokerAddr, 1, c.consumerID, c.stopSignal)
-	if err != nil {
+	if err := c.client.healthCheckService.StartHealthCheck(ctx, c.brokerAddr, 1, c.consumerID, c.stopSignal); err != nil {
 		return 0, err
 	}
 
 	return c.consumerID, nil
+}
+
+func (c *topicConsumer) lookupNewBroker(ctx context.Context) {
+	if newAddr, err := c.client.lookupService.handleLookup(ctx, c.brokerAddr, c.topicName); err == nil {
+		c.brokerAddr = newAddr
+	}
 }
 
 // receive starts receiving messages from the subscribed topic or topic partition.
@@ -105,7 +146,7 @@ func (c *topicConsumer) subscribe(ctx context.Context) (uint64, error) {
 // - error: An error if the receive client cannot be created or if other issues occur.
 func (c *topicConsumer) receive(ctx context.Context) (proto.ConsumerService_ReceiveMessagesClient, error) {
 	if c.streamClient == nil {
-		return nil, errors.New("stream client not initialized")
+		return nil, UnrecoverableError("Receive: consumer is not connected")
 	}
 
 	req := &proto.ReceiveRequest{
@@ -113,44 +154,32 @@ func (c *topicConsumer) receive(ctx context.Context) (proto.ConsumerService_Rece
 		ConsumerId: c.consumerID,
 	}
 
-	// Check if stopSignal is set
-	if c.stopSignal.Load() {
-		log.Println("Consumer has been stopped by broker, attempting to resubscribe.")
-
-		maxRetries := 3
-		attempts := 0
-		var err error
-
-		for attempts < maxRetries {
-			if _, err = c.subscribe(ctx); err == nil {
-				log.Println("Successfully resubscribed.")
-				return c.streamClient.ReceiveMessages(ctx, req)
-			}
-
-			attempts++
-			log.Printf("Resubscription attempt %d/%d failed: %v", attempts, maxRetries, err)
-			time.Sleep(2 * time.Second) // Wait before retrying
-		}
-
-		return nil, fmt.Errorf("failed to resubscribe after %d attempts: %v", maxRetries, err)
+	ctxWithAuth, err := c.client.authService.attachTokenIfNeeded(ctx, c.client.connectionManager.connectionOptions.APIKey, c.brokerAddr)
+	if err != nil {
+		return nil, err
 	}
 
-	return c.streamClient.ReceiveMessages(ctx, req)
+	return c.streamClient.ReceiveMessages(ctxWithAuth, req)
 }
 
 // sendAck sends an acknowledgement for a message to the broker.
 func (c *topicConsumer) sendAck(ctx context.Context, req_id uint64, msg_id *proto.MsgID, subscription_name string) (*proto.AckResponse, error) {
 	if c.streamClient == nil {
-		return nil, errors.New("stream client not initialized")
+		return nil, UnrecoverableError("SendAck: consumer is not connected")
 	}
 
-	ack_req := &proto.AckRequest{
+	ackReq := &proto.AckRequest{
 		RequestId:        req_id,
 		MsgId:            msg_id,
 		SubscriptionName: subscription_name,
 	}
 
-	return c.streamClient.Ack(ctx, ack_req)
+	ctxWithAuth, err := c.client.authService.attachTokenIfNeeded(ctx, c.client.connectionManager.connectionOptions.APIKey, c.brokerAddr)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.streamClient.Ack(ctxWithAuth, ackReq)
 }
 
 func (c *topicConsumer) connect(addr string) error {
@@ -158,6 +187,7 @@ func (c *topicConsumer) connect(addr string) error {
 	if err != nil {
 		return err
 	}
+	c.brokerAddr = addr
 	c.streamClient = proto.NewConsumerServiceClient(conn.grpcConn)
 	return nil
 }

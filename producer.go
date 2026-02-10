@@ -4,6 +4,9 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
+
+	"github.com/danube-messaging/danube-go/proto"
 )
 
 // Producer represents a message producer that is responsible for sending
@@ -13,7 +16,7 @@ type Producer struct {
 	mu                sync.Mutex
 	client            *DanubeClient
 	topicName         string                  // Name of the topic to which the producer sends messages.
-	schema            *Schema                 // The schema that defines the structure of the messages being produced.
+	schemaRef         *proto.SchemaReference  // Schema registry reference (optional)
 	dispatch_strategy *ConfigDispatchStrategy // The way the messages will be delivered to consumers
 	producerName      string                  // Name assigned to the producer instance.
 	partitions        int32                   // The number of partitions for the topic
@@ -27,16 +30,10 @@ func newProducer(
 	topicName string,
 	partitions int32,
 	producerName string,
-	schema *Schema,
+	schemaRef *proto.SchemaReference,
 	dispatch_strategy *ConfigDispatchStrategy,
 	producerOptions ProducerOptions,
 ) *Producer {
-
-	// Set default schema if not specified
-	if schema == nil {
-		schema = &Schema{Name: "string_schema", TypeSchema: SchemaType_STRING}
-	}
-
 	if dispatch_strategy == nil {
 		dispatch_strategy = NewConfigDispatchStrategy()
 	}
@@ -44,7 +41,7 @@ func newProducer(
 	return &Producer{
 		client:            client,
 		topicName:         topicName,
-		schema:            schema,
+		schemaRef:         schemaRef,
 		dispatch_strategy: dispatch_strategy,
 		producerName:      producerName,
 		partitions:        partitions, // 0 for non-partitioned
@@ -71,7 +68,7 @@ func (p *Producer) Create(ctx context.Context) error {
 			p.client,
 			p.topicName,
 			p.producerName,
-			p.schema,
+			p.schemaRef,
 			p.dispatch_strategy,
 			p.producerOptions,
 		)
@@ -85,7 +82,7 @@ func (p *Producer) Create(ctx context.Context) error {
 
 	} else {
 		if p.messageRouter == nil {
-			p.messageRouter = &MessageRouter{partitions: p.partitions}
+			p.messageRouter = NewMessageRouter(p.partitions)
 		}
 
 		producers := make([]*topicProducer, p.partitions)
@@ -107,7 +104,7 @@ func (p *Producer) Create(ctx context.Context) error {
 					p.client,
 					topicName,
 					producerName,
-					p.schema,
+					p.schemaRef,
 					p.dispatch_strategy,
 					p.producerOptions,
 				)
@@ -158,22 +155,67 @@ func (p *Producer) Send(ctx context.Context, data []byte, attributes map[string]
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	var partitionID int32
-	if p.partitions > 0 && p.messageRouter != nil {
-		// Use message router for partitioned topics
-		partitionID = p.messageRouter.RoundRobin()
-	} else {
-		partitionID = 0
-	}
+	partitionID := p.selectPartition()
 
 	if partitionID >= int32(len(p.producers)) {
 		return 0, fmt.Errorf("partition ID out of range")
 	}
 
-	requestID, err := p.producers[partitionID].send(ctx, data, attributes)
-	if err != nil {
-		fmt.Printf("Unable to send the data to producer: %s", p.producers[partitionID].producerName)
-	}
+	retryManager := NewRetryManager(p.producerOptions.MaxRetries, p.producerOptions.BaseBackoffMs, p.producerOptions.MaxBackoffMs)
+	attempts := 0
 
-	return requestID, nil
+	for {
+		requestID, err := p.producers[partitionID].send(ctx, data, attributes)
+		if err == nil {
+			return requestID, nil
+		}
+
+		if IsUnrecoverable(err) {
+			if err := p.recreateProducer(ctx, partitionID); err != nil {
+				return 0, err
+			}
+			attempts = 0
+			continue
+		}
+
+		if retryManager.IsRetryable(err) {
+			attempts++
+			if attempts > retryManager.MaxRetries() {
+				if err := p.lookupAndRecreate(ctx, partitionID, err); err != nil {
+					return 0, err
+				}
+				attempts = 0
+				continue
+			}
+			backoff := retryManager.CalculateBackoff(attempts - 1)
+			time.Sleep(backoff)
+			continue
+		}
+
+		return 0, err
+	}
+}
+
+func (p *Producer) selectPartition() int32 {
+	if p.partitions > 0 && p.messageRouter != nil {
+		return p.messageRouter.RoundRobin()
+	}
+	return 0
+}
+
+func (p *Producer) recreateProducer(ctx context.Context, partitionID int32) error {
+	producer := p.producers[partitionID]
+	_, err := producer.create(ctx)
+	return err
+}
+
+func (p *Producer) lookupAndRecreate(ctx context.Context, partitionID int32, originalErr error) error {
+	producer := p.producers[partitionID]
+	newAddr, err := producer.client.lookupService.handleLookup(ctx, producer.brokerAddr, producer.topic)
+	if err != nil {
+		return originalErr
+	}
+	producer.brokerAddr = newAddr
+	_, err = producer.create(ctx)
+	return err
 }

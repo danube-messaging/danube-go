@@ -2,9 +2,7 @@ package danube
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"log"
 	"sync/atomic"
 	"time"
 
@@ -22,32 +20,40 @@ type topicProducer struct {
 	producerName      string                      // name assigned to the producer instance.
 	producerID        uint64                      // The unique identifier for the producer, provided by broker
 	requestID         atomic.Uint64               // atomic counter for generating unique request IDs.
-	schema            *Schema                     // The schema that defines the structure of the messages being produced.
+	schemaRef         *proto.SchemaReference      // optional schema registry reference
+	schemaID          *uint64                     // resolved schema id
+	schemaVersion     *uint32                     // resolved schema version
 	dispatch_strategy *ConfigDispatchStrategy     // The way the messages will be delivered to consumers
 	producerOptions   ProducerOptions             // Options that configure the behavior of the producer.
 	streamClient      proto.ProducerServiceClient // gRPC client used for communication with the message broker.
 	stopSignal        *atomic.Bool                // An atomic boolean signal used to indicate if the producer should stop.
+	brokerAddr        string
+	retryManager      RetryManager
 }
 
 func newTopicProducer(
 	client *DanubeClient,
 	topic string,
 	producerName string,
-	schema *Schema,
+	schemaRef *proto.SchemaReference,
 	dispatch_strategy *ConfigDispatchStrategy,
 	producerOptions ProducerOptions,
 ) topicProducer {
+	retryManager := NewRetryManager(producerOptions.MaxRetries, producerOptions.BaseBackoffMs, producerOptions.MaxBackoffMs)
+
 	return topicProducer{
 		client:            client,
 		topic:             topic,
 		producerName:      producerName,
 		producerID:        0,
 		requestID:         atomic.Uint64{},
-		schema:            schema,
+		schemaRef:         schemaRef,
 		dispatch_strategy: dispatch_strategy,
 		producerOptions:   producerOptions,
 		streamClient:      nil,
 		stopSignal:        &atomic.Bool{},
+		brokerAddr:        client.URI,
+		retryManager:      retryManager,
 	}
 }
 
@@ -64,64 +70,81 @@ func newTopicProducer(
 // - uint64: The unique ID of the created producer if successful.
 // - error: An error if producer creation fails.
 func (p *topicProducer) create(ctx context.Context) (uint64, error) {
-	// Initialize the gRPC client connection
-	if err := p.connect(p.client.URI); err != nil {
+	attempts := 0
+
+	for {
+		producerID, err := p.tryCreate(ctx)
+		if err == nil {
+			return producerID, nil
+		}
+
+		if !p.retryManager.IsRetryable(err) {
+			return 0, err
+		}
+
+		attempts++
+		if attempts > p.retryManager.MaxRetries() {
+			return 0, err
+		}
+
+		p.lookupNewBroker(ctx)
+		backoff := p.retryManager.CalculateBackoff(attempts - 1)
+		time.Sleep(backoff)
+	}
+}
+
+func (p *topicProducer) tryCreate(ctx context.Context) (uint64, error) {
+	if err := p.connect(p.brokerAddr); err != nil {
 		return 0, err
+	}
+
+	if p.dispatch_strategy == nil {
+		p.dispatch_strategy = NewConfigDispatchStrategy()
 	}
 
 	req := &proto.ProducerRequest{
 		RequestId:          p.requestID.Add(1),
 		ProducerName:       p.producerName,
 		TopicName:          p.topic,
-		Schema:             p.schema.ToProto(),
+		SchemaRef:          p.schemaRef,
 		ProducerAccessMode: proto.ProducerAccessMode_Shared,
 		DispatchStrategy:   p.dispatch_strategy.ToProtoDispatchStrategy(),
 	}
 
-	maxRetries := 4
-	attempts := 0
-	brokerAddr := p.client.URI
+	ctxWithAuth, err := p.client.authService.attachTokenIfNeeded(ctx, p.client.connectionManager.connectionOptions.APIKey, p.brokerAddr)
+	if err != nil {
+		return 0, err
+	}
 
-	for {
-		resp, err := p.streamClient.CreateProducer(ctx, req)
-		if err == nil {
-			p.producerID = resp.ProducerId
-
-			// Start health check service
-			err = p.client.healthCheckService.StartHealthCheck(ctx, brokerAddr, 0, p.producerID, p.stopSignal)
-			if err != nil {
-				return 0, err
-			}
-
-			return p.producerID, nil
-		}
-
+	resp, err := p.streamClient.CreateProducer(ctxWithAuth, req)
+	if err != nil {
 		if status.Code(err) == codes.AlreadyExists {
 			return 0, fmt.Errorf("producer already exists: %v", err)
 		}
+		return 0, err
+	}
 
-		attempts++
-		if attempts >= maxRetries {
-			return 0, fmt.Errorf("failed to create producer after retries: %v", err)
-		}
+	p.producerID = resp.ProducerId
 
-		// Handle SERVICE_NOT_READY error
-		if status.Code(err) == codes.Unavailable {
-			time.Sleep(2 * time.Second)
+	if err := p.client.healthCheckService.StartHealthCheck(ctx, p.brokerAddr, 0, p.producerID, p.stopSignal); err != nil {
+		return 0, err
+	}
 
-			broker_addr, lookupErr := p.client.lookupService.handleLookup(ctx, brokerAddr, p.topic)
-			if lookupErr != nil {
-				return 0, fmt.Errorf("lookup failed: %v", lookupErr)
-			}
-
-			if err := p.connect(broker_addr); err != nil {
-				return 0, err
-			}
-			p.client.URI = broker_addr
-			brokerAddr = broker_addr
-		} else {
+	if p.schemaRef != nil {
+		schemaID, schemaVersion, err := p.resolveSchemaMetadata(ctx, p.schemaRef)
+		if err != nil {
 			return 0, err
 		}
+		p.schemaID = &schemaID
+		p.schemaVersion = &schemaVersion
+	}
+
+	return p.producerID, nil
+}
+
+func (p *topicProducer) lookupNewBroker(ctx context.Context) {
+	if newAddr, err := p.client.lookupService.handleLookup(ctx, p.brokerAddr, p.topic); err == nil {
+		p.brokerAddr = newAddr
 	}
 }
 
@@ -140,26 +163,20 @@ func (p *topicProducer) create(ctx context.Context) (uint64, error) {
 // - uint64: The sequence ID of the sent message if successful.
 // - error: An error if message sending fail
 func (p *topicProducer) send(ctx context.Context, data []byte, attributes map[string]string) (uint64, error) {
-	// Check if the stop signal indicates that the producer should be stopped
-	// this could happen due to a topic closure or movement to another broker
-	if p.stopSignal.Load() {
-		log.Printf("Producer %s has been stopped, attempting to recreate.", p.producerName)
-		if _, err := p.create(ctx); err != nil {
-			return 0, fmt.Errorf("failed to recreate producer: %v", err)
-		}
+	if p.streamClient == nil {
+		return 0, UnrecoverableError("Send: producer is not connected")
 	}
 
-	// Use an empty map if attributes are nil
 	if attributes == nil {
 		attributes = make(map[string]string)
 	}
 
-	publishTime := uint64(time.Now().UnixNano() / int64(time.Millisecond))
+	publishTime := uint64(time.Now().UnixMilli())
 
 	msgID := &proto.MsgID{
 		ProducerId: p.producerID,
 		TopicName:  p.topic,
-		BrokerAddr: p.client.URI,
+		BrokerAddr: p.brokerAddr,
 	}
 
 	req := &proto.StreamMessage{
@@ -170,15 +187,18 @@ func (p *topicProducer) send(ctx context.Context, data []byte, attributes map[st
 		ProducerName:     p.producerName,
 		SubscriptionName: "",
 		Attributes:       attributes,
+		SchemaId:         p.schemaID,
+		SchemaVersion:    p.schemaVersion,
 	}
 
-	if p.streamClient == nil {
-		return 0, errors.New("stream client not initialized")
-	}
-
-	res, err := p.streamClient.SendMessage(ctx, req)
+	ctxWithAuth, err := p.client.authService.attachTokenIfNeeded(ctx, p.client.connectionManager.connectionOptions.APIKey, p.brokerAddr)
 	if err != nil {
-		return 0, fmt.Errorf("failed to send message: %v", err)
+		return 0, err
+	}
+
+	res, err := p.streamClient.SendMessage(ctxWithAuth, req)
+	if err != nil {
+		return 0, err
 	}
 
 	return res.RequestId, nil
@@ -191,4 +211,53 @@ func (p *topicProducer) connect(addr string) error {
 	}
 	p.streamClient = proto.NewProducerServiceClient(conn.grpcConn)
 	return nil
+}
+
+func (p *topicProducer) resolveSchemaMetadata(ctx context.Context, schemaRef *proto.SchemaReference) (uint64, uint32, error) {
+	client := p.client.Schema()
+
+	if schemaRef == nil {
+		return 0, 0, fmt.Errorf("schema reference is nil")
+	}
+
+	switch ref := schemaRef.GetVersionRef().(type) {
+	case *proto.SchemaReference_PinnedVersion:
+		latest, err := client.GetLatestSchema(ctx, schemaRef.GetSubject())
+		if err != nil {
+			return 0, 0, err
+		}
+		if ref.PinnedVersion > latest.Version {
+			return 0, 0, fmt.Errorf("pinned version %d does not exist for subject %s", ref.PinnedVersion, schemaRef.GetSubject())
+		}
+		if ref.PinnedVersion == latest.Version {
+			return latest.SchemaID, latest.Version, nil
+		}
+		version := ref.PinnedVersion
+		pinned, err := client.GetSchemaVersion(ctx, latest.SchemaID, &version)
+		if err != nil {
+			return 0, 0, err
+		}
+		return pinned.SchemaID, pinned.Version, nil
+	case *proto.SchemaReference_MinVersion:
+		latest, err := client.GetLatestSchema(ctx, schemaRef.GetSubject())
+		if err != nil {
+			return 0, 0, err
+		}
+		if latest.Version < ref.MinVersion {
+			return 0, 0, fmt.Errorf("latest version %d does not meet minimum %d for subject %s", latest.Version, ref.MinVersion, schemaRef.GetSubject())
+		}
+		return latest.SchemaID, latest.Version, nil
+	case *proto.SchemaReference_UseLatest:
+		latest, err := client.GetLatestSchema(ctx, schemaRef.GetSubject())
+		if err != nil {
+			return 0, 0, err
+		}
+		return latest.SchemaID, latest.Version, nil
+	default:
+		latest, err := client.GetLatestSchema(ctx, schemaRef.GetSubject())
+		if err != nil {
+			return 0, 0, err
+		}
+		return latest.SchemaID, latest.Version, nil
+	}
 }

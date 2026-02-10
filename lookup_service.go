@@ -16,15 +16,17 @@ type LookupResult struct {
 
 // LookupService handles lookup operations
 type lookupService struct {
-	cnxManager *connectionManager
-	requestID  atomic.Uint64
+	cnxManager  *connectionManager
+	authService *AuthService
+	requestID   atomic.Uint64
 }
 
 // NewLookupService creates a new instance of LookupService
-func NewLookupService(cnxManager *connectionManager) *lookupService {
+func NewLookupService(cnxManager *connectionManager, authService *AuthService) *lookupService {
 	return &lookupService{
-		cnxManager: cnxManager,
-		requestID:  atomic.Uint64{},
+		cnxManager:  cnxManager,
+		authService: authService,
+		requestID:   atomic.Uint64{},
 	}
 }
 
@@ -42,7 +44,12 @@ func (ls *lookupService) lookupTopic(ctx context.Context, addr string, topic str
 		Topic:     topic,
 	}
 
-	response, err := client.TopicLookup(ctx, lookupRequest)
+	ctxWithAuth, err := ls.authService.attachTokenIfNeeded(ctx, ls.cnxManager.connectionOptions.APIKey, addr)
+	if err != nil {
+		return nil, err
+	}
+
+	response, err := client.TopicLookup(ctxWithAuth, lookupRequest)
 	if err != nil {
 		return nil, err
 	}
@@ -67,7 +74,12 @@ func (ls *lookupService) topicPartitions(ctx context.Context, addr string, topic
 		Topic:     topic,
 	}
 
-	response, err := client.TopicPartitions(ctx, lookupRequest)
+	ctxWithAuth, err := ls.authService.attachTokenIfNeeded(ctx, ls.cnxManager.connectionOptions.APIKey, addr)
+	if err != nil {
+		return nil, err
+	}
+
+	response, err := client.TopicPartitions(ctxWithAuth, lookupRequest)
 	if err != nil {
 		return nil, err
 	}

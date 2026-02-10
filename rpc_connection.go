@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/keepalive"
 )
@@ -40,23 +41,30 @@ func WithConnectionTimeout(timeout time.Duration) DialOption {
 }
 
 // NewRpcConnection creates a new RpcConnection with the given options.
-func newRpcConnection(connectURL string, options ...DialOption) (*rpcConnection, error) {
+func newRpcConnection(connectURL string, options ConnectionOptions) (*rpcConnection, error) {
 	var dialOptions []grpc.DialOption
 
-	// Apply default options
-	dialOptions = append(dialOptions, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	// Apply transport credentials
+	if options.UseTLS {
+		if options.TLSConfig == nil {
+			return nil, fmt.Errorf("TLS is enabled but no TLS config provided")
+		}
+		dialOptions = append(dialOptions, grpc.WithTransportCredentials(credentials.NewTLS(options.TLSConfig)))
+	} else {
+		dialOptions = append(dialOptions, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	}
 
 	// Apply additional options
-	for _, opt := range options {
+	for _, opt := range options.DialOptions {
 		opt(&dialOptions)
 	}
 
-	// the server send the address with http, required by Rust tonic client
+	// the server send the address with http(s), required by Rust tonic client
 	// therefore needs to be trimmed here
-	prefix := "http://"
-	url_trimmed := strings.TrimPrefix(connectURL, prefix)
+	urlTrimmed := strings.TrimPrefix(connectURL, "http://")
+	urlTrimmed = strings.TrimPrefix(urlTrimmed, "https://")
 
-	conn, err := grpc.NewClient(url_trimmed, dialOptions...)
+	conn, err := grpc.NewClient(urlTrimmed, dialOptions...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect: %w", err)
 	}
