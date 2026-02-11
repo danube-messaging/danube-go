@@ -10,7 +10,7 @@ import (
 	"github.com/danube-messaging/danube-go/proto"
 )
 
-// the type of subscription (e.g., EXCLUSIVE, SHARED, FAILOVER)
+// SubType is the type of subscription (e.g., EXCLUSIVE, SHARED, FAILOVER).
 type SubType int
 
 const (
@@ -145,7 +145,7 @@ func (c *Consumer) Receive(ctx context.Context) (chan *proto.StreamMessage, erro
 	ctxWithCancel, cancel := context.WithCancel(ctx)
 	c.receiveCancel = cancel
 
-	retryManager := NewRetryManager(c.consumerOptions.MaxRetries, c.consumerOptions.BaseBackoffMs, c.consumerOptions.MaxBackoffMs)
+	retryManager := newRetryManager(c.consumerOptions.MaxRetries, c.consumerOptions.BaseBackoffMs, c.consumerOptions.MaxBackoffMs)
 
 	for _, consumer := range c.consumers {
 		consumer := consumer
@@ -188,7 +188,7 @@ func partitionReceiveLoop(
 	ctx context.Context,
 	consumer *topicConsumer,
 	msgChan chan<- *proto.StreamMessage,
-	retryManager RetryManager,
+	retryManager retryManager,
 	shutdown *atomic.Bool,
 ) {
 	attempts := 0
@@ -227,7 +227,7 @@ func partitionReceiveLoop(
 			continue
 		}
 
-		if err != nil && IsUnrecoverable(err) {
+		if err != nil && isUnrecoverable(err) {
 			if err := resubscribe(ctx, consumer); err != nil {
 				return
 			}
@@ -235,16 +235,16 @@ func partitionReceiveLoop(
 			continue
 		}
 
-		if err != nil && retryManager.IsRetryable(err) {
+		if err != nil && retryManager.isRetryable(err) {
 			attempts++
-			if attempts > retryManager.MaxRetries() {
+			if attempts > retryManager.maxRetriesValue() {
 				if err := resubscribe(ctx, consumer); err != nil {
 					return
 				}
 				attempts = 0
 				continue
 			}
-			backoff := retryManager.CalculateBackoff(attempts - 1)
+			backoff := retryManager.calculateBackoff(attempts - 1)
 			time.Sleep(backoff)
 			continue
 		}

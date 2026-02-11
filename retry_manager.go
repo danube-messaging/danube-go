@@ -14,14 +14,13 @@ const (
 	defaultMaxBackoffMs  = 5000
 )
 
-// RetryManager centralizes retry/backoff behavior.
-type RetryManager struct {
+type retryManager struct {
 	maxRetries    int
 	baseBackoffMs int64
 	maxBackoffMs  int64
 }
 
-func NewRetryManager(maxRetries int, baseBackoffMs int64, maxBackoffMs int64) RetryManager {
+func newRetryManager(maxRetries int, baseBackoffMs int64, maxBackoffMs int64) retryManager {
 	if maxRetries <= 0 {
 		maxRetries = defaultMaxRetries
 	}
@@ -31,18 +30,18 @@ func NewRetryManager(maxRetries int, baseBackoffMs int64, maxBackoffMs int64) Re
 	if maxBackoffMs <= 0 {
 		maxBackoffMs = defaultMaxBackoffMs
 	}
-	return RetryManager{
+	return retryManager{
 		maxRetries:    maxRetries,
 		baseBackoffMs: baseBackoffMs,
 		maxBackoffMs:  maxBackoffMs,
 	}
 }
 
-func (rm RetryManager) MaxRetries() int {
+func (rm retryManager) maxRetriesValue() int {
 	return rm.maxRetries
 }
 
-func (rm RetryManager) IsRetryable(err error) bool {
+func (rm retryManager) isRetryable(err error) bool {
 	st, ok := status.FromError(err)
 	if !ok {
 		return false
@@ -55,7 +54,7 @@ func (rm RetryManager) IsRetryable(err error) bool {
 	}
 }
 
-func (rm RetryManager) CalculateBackoff(attempt int) time.Duration {
+func (rm retryManager) calculateBackoff(attempt int) time.Duration {
 	linear := rm.baseBackoffMs * int64(attempt+1)
 	if linear > rm.maxBackoffMs {
 		linear = rm.maxBackoffMs

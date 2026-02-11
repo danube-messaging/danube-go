@@ -9,13 +9,13 @@ import (
 )
 
 // DanubeClient is the main client for interacting with the Danube messaging system.
-// It provides methods to create producers and consumers, perform topic lookups, and retrieve schema information.
+// It provides methods to create producers and consumers, and retrieve schema information.
 type DanubeClient struct {
 	URI                string
 	connectionManager  *connectionManager
 	lookupService      *lookupService
 	healthCheckService *healthCheckService
-	authService        *AuthService
+	authService        *authService
 }
 
 // NewClient initializes a new DanubeClientBuilder. The builder pattern allows for configuring and constructing
@@ -37,7 +37,7 @@ func newDanubeClient(builder DanubeClientBuilder) (*DanubeClient, error) {
 		}
 	}
 
-	lookupService := NewLookupService(connectionManager, authService)
+	lookupService := newLookupService(connectionManager, authService)
 	healthCheckService := newHealthCheckService(connectionManager, authService)
 
 	return &DanubeClient{
@@ -57,20 +57,6 @@ func (dc *DanubeClient) NewProducer() *ProducerBuilder {
 // NewConsumer returns a new ConsumerBuilder, which is used to configure and create a Consumer instance.
 func (dc *DanubeClient) NewConsumer() *ConsumerBuilder {
 	return newConsumerBuilder(dc)
-}
-
-// LookupTopic retrieves the address of the broker responsible for a specified topic.
-//
-// Parameters:
-// - ctx: The context for managing the lookup operation.
-// - addr: The address of the lookup service.
-// - topic: The name of the topic to look up.
-//
-// Returns:
-// - *LookupResult: The result of the lookup operation, containing broker address and other details.
-// - error: An error if the lookup fails or other issues occur.
-func (dc *DanubeClient) LookupTopic(ctx context.Context, addr string, topic string) (*LookupResult, error) {
-	return dc.lookupService.lookupTopic(ctx, addr, topic)
 }
 
 // Schema returns a SchemaRegistryClient for schema operations.

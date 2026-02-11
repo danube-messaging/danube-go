@@ -20,7 +20,7 @@ type Producer struct {
 	dispatch_strategy *ConfigDispatchStrategy // The way the messages will be delivered to consumers
 	producerName      string                  // Name assigned to the producer instance.
 	partitions        int32                   // The number of partitions for the topic
-	messageRouter     *MessageRouter          // The way the messages will be delivered to consumers
+	messageRouter     *messageRouter          // The way the messages will be delivered to consumers
 	producers         []*topicProducer        // All the underhood producers, for sending messages to topic partitions
 	producerOptions   ProducerOptions         // Options that configure the behavior of the producer.
 }
@@ -82,7 +82,7 @@ func (p *Producer) Create(ctx context.Context) error {
 
 	} else {
 		if p.messageRouter == nil {
-			p.messageRouter = NewMessageRouter(p.partitions)
+			p.messageRouter = newMessageRouter(p.partitions)
 		}
 
 		producers := make([]*topicProducer, p.partitions)
@@ -161,7 +161,7 @@ func (p *Producer) Send(ctx context.Context, data []byte, attributes map[string]
 		return 0, fmt.Errorf("partition ID out of range")
 	}
 
-	retryManager := NewRetryManager(p.producerOptions.MaxRetries, p.producerOptions.BaseBackoffMs, p.producerOptions.MaxBackoffMs)
+	retryManager := newRetryManager(p.producerOptions.MaxRetries, p.producerOptions.BaseBackoffMs, p.producerOptions.MaxBackoffMs)
 	attempts := 0
 
 	for {
@@ -170,7 +170,7 @@ func (p *Producer) Send(ctx context.Context, data []byte, attributes map[string]
 			return requestID, nil
 		}
 
-		if IsUnrecoverable(err) {
+		if isUnrecoverable(err) {
 			if err := p.recreateProducer(ctx, partitionID); err != nil {
 				return 0, err
 			}
@@ -178,16 +178,16 @@ func (p *Producer) Send(ctx context.Context, data []byte, attributes map[string]
 			continue
 		}
 
-		if retryManager.IsRetryable(err) {
+		if retryManager.isRetryable(err) {
 			attempts++
-			if attempts > retryManager.MaxRetries() {
+			if attempts > retryManager.maxRetriesValue() {
 				if err := p.lookupAndRecreate(ctx, partitionID, err); err != nil {
 					return 0, err
 				}
 				attempts = 0
 				continue
 			}
-			backoff := retryManager.CalculateBackoff(attempts - 1)
+			backoff := retryManager.calculateBackoff(attempts - 1)
 			time.Sleep(backoff)
 			continue
 		}
@@ -198,7 +198,7 @@ func (p *Producer) Send(ctx context.Context, data []byte, attributes map[string]
 
 func (p *Producer) selectPartition() int32 {
 	if p.partitions > 0 && p.messageRouter != nil {
-		return p.messageRouter.RoundRobin()
+		return p.messageRouter.roundRobin()
 	}
 	return 0
 }

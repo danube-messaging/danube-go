@@ -1,0 +1,53 @@
+name: Integration Tests
+
+on:
+  pull_request:
+
+jobs:
+  integration-tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Start test cluster
+        working-directory: docker
+        run: docker compose up -d
+
+      - name: Wait for broker to be healthy
+        working-directory: docker
+        run: |
+          echo "Waiting for broker to become healthy..."
+          for i in $(seq 1 30); do
+            status=$(docker inspect --format='{{.State.Health.Status}}' danube-test-broker 2>/dev/null || echo "missing")
+            if [ "$status" = "healthy" ]; then
+              echo "Broker is healthy."
+              break
+            fi
+            if [ "$i" -eq 30 ]; then
+              echo "Broker failed to become healthy (status: $status)"
+              docker compose logs broker
+              exit 1
+            fi
+            echo "  attempt $i/30 — status: $status"
+            sleep 5
+          done
+
+      - name: Run integration tests
+        run: go test ./integration_tests/ -v -count=1 -timeout 120s
+
+      - name: Print broker logs on failure
+        if: failure()
+        working-directory: docker
+        run: docker compose logs broker
+
+      - name: Stop test cluster
+        if: always()
+        working-directory: docker
+        run: docker compose down -v

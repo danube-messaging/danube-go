@@ -10,11 +10,11 @@ import (
 // SchemaRegistryClient provides access to the schema registry APIs.
 type SchemaRegistryClient struct {
 	cnxManager  *connectionManager
-	authService *AuthService
+	authService *authService
 	uri         string
 }
 
-func newSchemaRegistryClient(cnxManager *connectionManager, authService *AuthService, uri string) *SchemaRegistryClient {
+func newSchemaRegistryClient(cnxManager *connectionManager, authService *authService, uri string) *SchemaRegistryClient {
 	return &SchemaRegistryClient{
 		cnxManager:  cnxManager,
 		authService: authService,
@@ -203,31 +203,37 @@ type SchemaRegistrationBuilder struct {
 	tags        []string
 }
 
+// WithType sets the schema type for registration.
 func (b *SchemaRegistrationBuilder) WithType(schemaType SchemaType) *SchemaRegistrationBuilder {
 	b.schemaType = &schemaType
 	return b
 }
 
+// WithSchemaData sets the schema definition payload.
 func (b *SchemaRegistrationBuilder) WithSchemaData(data []byte) *SchemaRegistrationBuilder {
 	b.schemaData = data
 	return b
 }
 
+// WithDescription sets the optional schema description.
 func (b *SchemaRegistrationBuilder) WithDescription(description string) *SchemaRegistrationBuilder {
 	b.description = description
 	return b
 }
 
+// WithCreatedBy sets the creator metadata for the schema.
 func (b *SchemaRegistrationBuilder) WithCreatedBy(createdBy string) *SchemaRegistrationBuilder {
 	b.createdBy = createdBy
 	return b
 }
 
+// WithTags sets optional tags for the schema.
 func (b *SchemaRegistrationBuilder) WithTags(tags []string) *SchemaRegistrationBuilder {
 	b.tags = tags
 	return b
 }
 
+// Execute registers the schema and returns the schema ID.
 func (b *SchemaRegistrationBuilder) Execute(ctx context.Context) (uint64, error) {
 	if b.schemaType == nil {
 		return 0, fmt.Errorf("schema type is required")
