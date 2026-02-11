@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
+	"time"
 
 	"github.com/danube-messaging/danube-go/proto"
 )
@@ -31,6 +33,9 @@ type Consumer struct {
 	subscription     string                    // the name of the subscription for the consumer
 	subscriptionType SubType                   // the type of subscription (e.g., EXCLUSIVE, SHARED, FAILOVER)
 	consumerOptions  ConsumerOptions           // configuration options for the consumer
+	shutdown         *atomic.Bool
+	receiveCancel    context.CancelFunc
+	receiveWg        sync.WaitGroup
 }
 
 func newConsumer(
@@ -53,6 +58,7 @@ func newConsumer(
 		subscription:     subscription,
 		subscriptionType: subscriptionType,
 		consumerOptions:  options,
+		shutdown:         &atomic.Bool{},
 	}
 }
 
@@ -135,53 +141,23 @@ func (c *Consumer) Subscribe(ctx context.Context) error {
 // - StreamMessage channel for receiving messages from the broker.
 // - error: An error if the receive client cannot be created or if other issues occur.
 func (c *Consumer) Receive(ctx context.Context) (chan *proto.StreamMessage, error) {
-	// Create a channel to send messages to the client
-	msgChan := make(chan *proto.StreamMessage, 100) // Buffer size of 100, adjust as needed
+	msgChan := make(chan *proto.StreamMessage, 100)
+	ctxWithCancel, cancel := context.WithCancel(ctx)
+	c.receiveCancel = cancel
 
-	var wg sync.WaitGroup
+	retryManager := NewRetryManager(c.consumerOptions.MaxRetries, c.consumerOptions.BaseBackoffMs, c.consumerOptions.MaxBackoffMs)
 
-	// Spawn a goroutine for each topicConsumer
 	for _, consumer := range c.consumers {
-		consumer := consumer // capture loop variable
-		wg.Add(1)
-
+		consumer := consumer
+		c.receiveWg.Add(1)
 		go func() {
-			defer wg.Done()
-			stream, err := consumer.receive(ctx)
-			if err != nil {
-				fmt.Println("Error receiving messages:", err)
-				return
-			}
-
-			// Receive messages from the stream
-			for {
-				select {
-				case <-ctx.Done():
-					// Context canceled, stop receiving messages
-					return
-				default:
-					message, err := stream.Recv()
-					if err != nil {
-						// Error receiving message, log it and exit the loop
-						fmt.Println("Error receiving message:", err)
-						return
-					}
-
-					// Send the received message to the channel
-					select {
-					case msgChan <- message:
-					case <-ctx.Done():
-						// Context canceled, stop sending messages
-						return
-					}
-				}
-			}
+			defer c.receiveWg.Done()
+			partitionReceiveLoop(ctxWithCancel, consumer, msgChan, retryManager, c.shutdown)
 		}()
 	}
 
-	// Close the message channel when all goroutines are done
 	go func() {
-		wg.Wait()
+		c.receiveWg.Wait()
 		close(msgChan)
 	}()
 
@@ -193,4 +169,93 @@ func (c *Consumer) Ack(ctx context.Context, message *proto.StreamMessage) (*prot
 	topic_name := message.GetMsgId().GetTopicName()
 	topic_consumer := c.consumers[topic_name]
 	return topic_consumer.sendAck(ctx, message.GetRequestId(), message.GetMsgId(), c.subscription)
+}
+
+// Close stops receive loops and signals topic consumers to stop.
+func (c *Consumer) Close() {
+	c.shutdown.Store(true)
+	if c.receiveCancel != nil {
+		c.receiveCancel()
+	}
+	for _, consumer := range c.consumers {
+		consumer.stop()
+	}
+	// allow broker to observe closure
+	time.Sleep(100 * time.Millisecond)
+}
+
+func partitionReceiveLoop(
+	ctx context.Context,
+	consumer *topicConsumer,
+	msgChan chan<- *proto.StreamMessage,
+	retryManager RetryManager,
+	shutdown *atomic.Bool,
+) {
+	attempts := 0
+
+	for {
+		if shutdown.Load() {
+			return
+		}
+
+		stream, err := consumer.receive(ctx)
+		if err == nil {
+			attempts = 0
+			for !shutdown.Load() && !consumer.stopSignal.Load() {
+				message, recvErr := stream.Recv()
+				if recvErr != nil {
+					err = recvErr
+					break
+				}
+				select {
+				case msgChan <- message:
+				case <-ctx.Done():
+					return
+				}
+			}
+		}
+
+		if shutdown.Load() {
+			return
+		}
+
+		if consumer.stopSignal.Load() {
+			consumer.stopSignal.Store(false)
+			if err := resubscribe(ctx, consumer); err != nil {
+				return
+			}
+			continue
+		}
+
+		if err != nil && IsUnrecoverable(err) {
+			if err := resubscribe(ctx, consumer); err != nil {
+				return
+			}
+			attempts = 0
+			continue
+		}
+
+		if err != nil && retryManager.IsRetryable(err) {
+			attempts++
+			if attempts > retryManager.MaxRetries() {
+				if err := resubscribe(ctx, consumer); err != nil {
+					return
+				}
+				attempts = 0
+				continue
+			}
+			backoff := retryManager.CalculateBackoff(attempts - 1)
+			time.Sleep(backoff)
+			continue
+		}
+
+		if err != nil {
+			return
+		}
+	}
+}
+
+func resubscribe(ctx context.Context, consumer *topicConsumer) error {
+	_, err := consumer.subscribe(ctx)
+	return err
 }

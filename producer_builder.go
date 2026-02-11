@@ -1,6 +1,10 @@
 package danube
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/danube-messaging/danube-go/proto"
+)
 
 // ProducerBuilder is a builder for creating a new Producer instance. It allows
 // setting various properties for the producer such as topic, name, schema, and options.
@@ -9,7 +13,7 @@ type ProducerBuilder struct {
 	topic             string
 	producerName      string
 	partitions        int32
-	schema            *Schema
+	schemaRef         *proto.SchemaReference
 	dispatch_strategy *ConfigDispatchStrategy
 	producerOptions   ProducerOptions
 }
@@ -19,7 +23,7 @@ func newProducerBuilder(client *DanubeClient) *ProducerBuilder {
 		client:          client,
 		topic:           "",
 		producerName:    "",
-		schema:          nil,
+		schemaRef:       nil,
 		producerOptions: ProducerOptions{},
 	}
 }
@@ -42,14 +46,42 @@ func (pb *ProducerBuilder) WithName(producerName string) *ProducerBuilder {
 	return pb
 }
 
-// WithSchema sets the schema for the producer, defining the structure of the messages.
-//
-// Parameters:
-// - schemaName: The name of the schema.
-// - schemaType: The type of the schema (e.g., SchemaType_BYTES, SchemaType_STRING, SchemaType_JSON)
-// - schemaData: The data or definition of the schema only if it is SchemaType_JSON
-func (pb *ProducerBuilder) WithSchema(schemaName string, schemaType SchemaType, schemaData string) *ProducerBuilder {
-	pb.schema = NewSchema(schemaName, schemaType, schemaData)
+// WithSchemaSubject sets the schema registry subject (uses latest version).
+func (pb *ProducerBuilder) WithSchemaSubject(subject string) *ProducerBuilder {
+	pb.schemaRef = &proto.SchemaReference{
+		Subject: subject,
+		VersionRef: &proto.SchemaReference_UseLatest{
+			UseLatest: true,
+		},
+	}
+	return pb
+}
+
+// WithSchemaVersion pins a schema subject to a specific version.
+func (pb *ProducerBuilder) WithSchemaVersion(subject string, version uint32) *ProducerBuilder {
+	pb.schemaRef = &proto.SchemaReference{
+		Subject: subject,
+		VersionRef: &proto.SchemaReference_PinnedVersion{
+			PinnedVersion: version,
+		},
+	}
+	return pb
+}
+
+// WithSchemaMinVersion enforces a minimum schema version.
+func (pb *ProducerBuilder) WithSchemaMinVersion(subject string, minVersion uint32) *ProducerBuilder {
+	pb.schemaRef = &proto.SchemaReference{
+		Subject: subject,
+		VersionRef: &proto.SchemaReference_MinVersion{
+			MinVersion: minVersion,
+		},
+	}
+	return pb
+}
+
+// WithSchemaReference sets a custom SchemaReference (advanced use).
+func (pb *ProducerBuilder) WithSchemaReference(schemaRef *proto.SchemaReference) *ProducerBuilder {
+	pb.schemaRef = schemaRef
 	return pb
 }
 
@@ -101,13 +133,14 @@ func (pb *ProducerBuilder) Build() (*Producer, error) {
 		pb.topic,
 		pb.partitions,
 		pb.producerName,
-		pb.schema,
+		pb.schemaRef,
 		pb.dispatch_strategy,
 		pb.producerOptions,
 	), nil
 }
 
 type ProducerOptions struct {
-	// not used yet
-	//others string
+	MaxRetries    int
+	BaseBackoffMs int64
+	MaxBackoffMs  int64
 }

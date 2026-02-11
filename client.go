@@ -2,6 +2,10 @@ package danube
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
+	"fmt"
+	"os"
 )
 
 // DanubeClient is the main client for interacting with the Danube messaging system.
@@ -10,8 +14,8 @@ type DanubeClient struct {
 	URI                string
 	connectionManager  *connectionManager
 	lookupService      *lookupService
-	schemaService      *schemaService
 	healthCheckService *healthCheckService
+	authService        *AuthService
 }
 
 // NewClient initializes a new DanubeClientBuilder. The builder pattern allows for configuring and constructing
@@ -23,34 +27,35 @@ func NewClient() *DanubeClientBuilder {
 	return &DanubeClientBuilder{}
 }
 
-func newDanubeClient(builder DanubeClientBuilder) *DanubeClient {
-	connectionManager := newConnectionManager(builder.ConnectionOptions)
-	lookupService := NewLookupService(connectionManager)
-	schemaService := newSchemaService(connectionManager)
-	healthCheckService := newHealthCheckService(connectionManager)
+func newDanubeClient(builder DanubeClientBuilder) (*DanubeClient, error) {
+	connectionManager := newConnectionManager(builder.connectionOptions)
+	authService := newAuthService(connectionManager)
+
+	if builder.connectionOptions.APIKey != "" {
+		if _, err := authService.authenticateClient(context.Background(), builder.URI, builder.connectionOptions.APIKey); err != nil {
+			return nil, err
+		}
+	}
+
+	lookupService := NewLookupService(connectionManager, authService)
+	healthCheckService := newHealthCheckService(connectionManager, authService)
 
 	return &DanubeClient{
 		URI:                builder.URI,
 		connectionManager:  connectionManager,
 		lookupService:      lookupService,
-		schemaService:      schemaService,
 		healthCheckService: healthCheckService,
-	}
+		authService:        authService,
+	}, nil
 }
 
 // NewProducer returns a new ProducerBuilder, which is used to configure and create a Producer instance.
-//
-// Parameters:
-// - ctx: The context for managing the lifecycle of the ProducerBuilder and any operations performed with it.
-func (dc *DanubeClient) NewProducer(ctx context.Context) *ProducerBuilder {
+func (dc *DanubeClient) NewProducer() *ProducerBuilder {
 	return newProducerBuilder(dc)
 }
 
 // NewConsumer returns a new ConsumerBuilder, which is used to configure and create a Consumer instance.
-//
-// Parameters:
-// - ctx: The context for managing the lifecycle of the ConsumerBuilder and any operations performed with it.
-func (dc *DanubeClient) NewConsumer(ctx context.Context) *ConsumerBuilder {
+func (dc *DanubeClient) NewConsumer() *ConsumerBuilder {
 	return newConsumerBuilder(dc)
 }
 
@@ -68,17 +73,9 @@ func (dc *DanubeClient) LookupTopic(ctx context.Context, addr string, topic stri
 	return dc.lookupService.lookupTopic(ctx, addr, topic)
 }
 
-// GetSchema retrieves the schema associated with a specified topic from the schema service.
-//
-// Parameters:
-// - ctx: The context for managing the schema retrieval operation.
-// - topic: The name of the topic for which the schema is to be retrieved.
-//
-// Returns:
-// - *Schema: The schema associated with the topic.
-// - error: An error if the schema retrieval fails or other issues occur.
-func (dc *DanubeClient) GetSchema(ctx context.Context, topic string) (*Schema, error) {
-	return dc.schemaService.getSchema(ctx, dc.URI, topic)
+// Schema returns a SchemaRegistryClient for schema operations.
+func (dc *DanubeClient) Schema() *SchemaRegistryClient {
+	return newSchemaRegistryClient(dc.connectionManager, dc.authService, dc.URI)
 }
 
 // DanubeClientBuilder is used for configuring and creating a DanubeClient instance. It provides methods for setting
@@ -89,7 +86,7 @@ func (dc *DanubeClient) GetSchema(ctx context.Context, topic string) (*Schema, e
 // - ConnectionOptions: Optional connection settings for configuring how the client connects to the service.
 type DanubeClientBuilder struct {
 	URI               string
-	ConnectionOptions []DialOption
+	connectionOptions ConnectionOptions
 }
 
 // ServiceURL sets the base URI for the Danube service in the builder.
@@ -104,15 +101,73 @@ func (b *DanubeClientBuilder) ServiceURL(url string) *DanubeClientBuilder {
 	return b
 }
 
-// WithConnectionOptions sets optional connection settings for the client in the builder.
-//
-// Parameters:
-// - options: A slice of DialOption used to configure the client's connection settings.
-//
-// Returns:
-// - *DanubeClientBuilder: The updated builder instance with the specified connection options.
-func (b *DanubeClientBuilder) WithConnectionOptions(options []DialOption) *DanubeClientBuilder {
-	b.ConnectionOptions = options
+// WithConnectionOptions sets connection settings for the client in the builder.
+func (b *DanubeClientBuilder) WithConnectionOptions(options ConnectionOptions) *DanubeClientBuilder {
+	b.connectionOptions = options
+	return b
+}
+
+// WithDialOptions appends gRPC dial options to the connection options.
+func (b *DanubeClientBuilder) WithDialOptions(options ...DialOption) *DanubeClientBuilder {
+	b.connectionOptions.DialOptions = append(b.connectionOptions.DialOptions, options...)
+	return b
+}
+
+// WithTLS enables TLS using a custom CA certificate.
+func (b *DanubeClientBuilder) WithTLS(caCertPath string) (*DanubeClientBuilder, error) {
+	caData, err := os.ReadFile(caCertPath)
+	if err != nil {
+		return b, err
+	}
+	caPool := x509.NewCertPool()
+	if !caPool.AppendCertsFromPEM(caData) {
+		return b, fmt.Errorf("unable to parse CA certificate")
+	}
+	b.connectionOptions.TLSConfig = &tls.Config{RootCAs: caPool}
+	b.connectionOptions.UseTLS = true
+	return b, nil
+}
+
+// WithMTLS enables mutual TLS using CA, client certificate, and client key.
+func (b *DanubeClientBuilder) WithMTLS(caCertPath, clientCertPath, clientKeyPath string) (*DanubeClientBuilder, error) {
+	caData, err := os.ReadFile(caCertPath)
+	if err != nil {
+		return b, err
+	}
+	caPool := x509.NewCertPool()
+	if !caPool.AppendCertsFromPEM(caData) {
+		return b, fmt.Errorf("unable to parse CA certificate")
+	}
+
+	certData, err := os.ReadFile(clientCertPath)
+	if err != nil {
+		return b, err
+	}
+	keyData, err := os.ReadFile(clientKeyPath)
+	if err != nil {
+		return b, err
+	}
+
+	clientCert, err := tls.X509KeyPair(certData, keyData)
+	if err != nil {
+		return b, err
+	}
+
+	b.connectionOptions.TLSConfig = &tls.Config{
+		RootCAs:      caPool,
+		Certificates: []tls.Certificate{clientCert},
+	}
+	b.connectionOptions.UseTLS = true
+	return b, nil
+}
+
+// WithAPIKey configures API key authentication and enables TLS with system roots.
+func (b *DanubeClientBuilder) WithAPIKey(apiKey string) *DanubeClientBuilder {
+	b.connectionOptions.APIKey = apiKey
+	b.connectionOptions.UseTLS = true
+	if b.connectionOptions.TLSConfig == nil {
+		b.connectionOptions.TLSConfig = &tls.Config{}
+	}
 	return b
 }
 
@@ -120,6 +175,6 @@ func (b *DanubeClientBuilder) WithConnectionOptions(options []DialOption) *Danub
 //
 // Returns:
 // - *DanubeClient: A new instance of DanubeClient configured with the specified options.
-func (b *DanubeClientBuilder) Build() *DanubeClient {
+func (b *DanubeClientBuilder) Build() (*DanubeClient, error) {
 	return newDanubeClient(*b)
 }

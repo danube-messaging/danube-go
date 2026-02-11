@@ -10,14 +10,16 @@ import (
 )
 
 type healthCheckService struct {
-	cnxManager *connectionManager
-	RequestID  atomic.Uint64
+	cnxManager  *connectionManager
+	authService *AuthService
+	requestID   atomic.Uint64
 }
 
-func newHealthCheckService(cnxManager *connectionManager) *healthCheckService {
+func newHealthCheckService(cnxManager *connectionManager, authService *AuthService) *healthCheckService {
 	return &healthCheckService{
-		cnxManager: cnxManager,
-		RequestID:  atomic.Uint64{},
+		cnxManager:  cnxManager,
+		authService: authService,
+		requestID:   atomic.Uint64{},
 	}
 }
 
@@ -33,12 +35,15 @@ func (hcs *healthCheckService) StartHealthCheck(
 		return err
 	}
 
+	apiKey := hcs.cnxManager.connectionOptions.APIKey
+	addrCopy := addr
+
 	log.Printf("Starting Health Check Service for: %v , with id: %d", clientType, clientID)
 
 	client := proto.NewHealthCheckClient(conn.grpcConn)
 	go func() {
 		for {
-			err := healthCheck(ctx, client, hcs.RequestID.Add(1), clientType, clientID, stopSignal)
+			err := healthCheck(ctx, client, hcs.requestID.Add(1), clientType, clientID, stopSignal, apiKey, addrCopy, hcs.authService)
 			if err != nil {
 				log.Printf("Error in health check: %v", err)
 				return
@@ -56,6 +61,9 @@ func healthCheck(
 	clientType int32,
 	clientID uint64,
 	stopSignal *atomic.Bool,
+	apiKey string,
+	addr string,
+	authService *AuthService,
 ) error {
 	healthRequest := &proto.HealthCheckRequest{
 		RequestId: requestID,
@@ -63,7 +71,12 @@ func healthCheck(
 		Id:        clientID,
 	}
 
-	response, err := client.HealthCheck(ctx, healthRequest)
+	ctxWithAuth, err := authService.attachTokenIfNeeded(ctx, apiKey, addr)
+	if err != nil {
+		return err
+	}
+
+	response, err := client.HealthCheck(ctxWithAuth, healthRequest)
 	if err != nil {
 		return err
 	}

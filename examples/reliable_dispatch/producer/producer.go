@@ -13,7 +13,10 @@ func main() {
 	// Setup logging
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
-	client := danube.NewClient().ServiceURL("127.0.0.1:6650").Build()
+	client, err := danube.NewClient().ServiceURL("127.0.0.1:6650").Build()
+	if err != nil {
+		log.Fatalf("failed to create client: %v", err)
+	}
 
 	ctx := context.Background()
 	topic := "/default/topic_reliable"
@@ -22,7 +25,7 @@ func main() {
 	// For reliable strategy (now configured at broker side)
 	reliableStrategy := danube.NewReliableDispatchStrategy()
 
-	producer, err := client.NewProducer(ctx).
+	producer, err := client.NewProducer().
 		WithName(producerName).
 		WithTopic(topic).
 		WithDispatchStrategy(reliableStrategy).

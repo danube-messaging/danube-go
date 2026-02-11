@@ -14,17 +14,30 @@ func main() {
 	// Setup logging
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
-	client := danube.NewClient().ServiceURL("127.0.0.1:6650").Build()
+	client, err := danube.NewClient().ServiceURL("127.0.0.1:6650").Build()
+	if err != nil {
+		log.Fatalf("failed to create client: %v", err)
+	}
 
 	ctx := context.Background()
 	topic := "/default/topic_json"
 	jsonSchema := `{"type": "object", "properties": {"field1": {"type": "string"}, "field2": {"type": "integer"}}}`
 	producerName := "producer_json"
 
-	producer, err := client.NewProducer(ctx).
+	// Register schema in the schema registry (if not already registered)
+	_, err = client.Schema().RegisterSchema("topic_json-value").
+		WithType(danube.SchemaTypeJSONSchema).
+		WithSchemaData([]byte(jsonSchema)).
+		WithDescription("JSON schema for topic_json").
+		Execute(ctx)
+	if err != nil {
+		log.Fatalf("failed to register schema: %v", err)
+	}
+
+	producer, err := client.NewProducer().
 		WithName(producerName).
 		WithTopic(topic).
-		WithSchema("test_schema", danube.SchemaType_JSON, jsonSchema).
+		WithSchemaSubject("topic_json-value").
 		Build()
 	if err != nil {
 		log.Fatalf("unable to initialize the producer: %v", err)

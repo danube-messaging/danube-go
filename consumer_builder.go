@@ -1,9 +1,6 @@
 package danube
 
-import (
-	"errors"
-	// Path to your generated proto package
-)
+import "errors"
 
 // ConsumerBuilder is a builder for creating a new Consumer instance. It allows
 // setting various properties for the consumer such as topic, name, subscription,
@@ -71,5 +68,7 @@ func (b *ConsumerBuilder) Build() (*Consumer, error) {
 }
 
 type ConsumerOptions struct {
-	Others string
+	MaxRetries    int
+	BaseBackoffMs int64
+	MaxBackoffMs  int64
 }
