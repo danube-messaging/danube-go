@@ -4,19 +4,19 @@ import (
 	"sync/atomic"
 )
 
-type MessageRouter struct {
+type messageRouter struct {
 	partitions    int32
 	lastPartition int32
 }
 
-func NewMessageRouter(partitions int32) *MessageRouter {
-	return &MessageRouter{
+func newMessageRouter(partitions int32) *messageRouter {
+	return &messageRouter{
 		partitions:    partitions,
 		lastPartition: partitions - 1,
 	}
 }
 
-func (router *MessageRouter) RoundRobin() int32 {
+func (router *messageRouter) roundRobin() int32 {
 	// Atomically get the current value of lastPartition
 	last := atomic.LoadInt32(&router.lastPartition)
 

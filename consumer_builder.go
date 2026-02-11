@@ -54,6 +54,12 @@ func (b *ConsumerBuilder) WithSubscriptionType(subType SubType) *ConsumerBuilder
 	return b
 }
 
+// WithOptions sets the configuration options for the consumer.
+func (b *ConsumerBuilder) WithOptions(options ConsumerOptions) *ConsumerBuilder {
+	b.consumerOptions = options
+	return b
+}
+
 // Build creates a new Consumer instance using the settings configured in the ConsumerBuilder.
 // It performs validation to ensure that all required fields are set before creating the consumer.
 //
@@ -67,8 +73,9 @@ func (b *ConsumerBuilder) Build() (*Consumer, error) {
 	return newConsumer(b.client, b.topic, b.consumerName, b.subscription, b.subscriptionType, b.consumerOptions), nil
 }
 
+// ConsumerOptions configures retry behavior for consumers.
 type ConsumerOptions struct {
-	MaxRetries    int
-	BaseBackoffMs int64
-	MaxBackoffMs  int64
+	MaxRetries    int   // Maximum retry attempts for receive/subscribe operations.
+	BaseBackoffMs int64 // Base backoff in milliseconds.
+	MaxBackoffMs  int64 // Maximum backoff in milliseconds.
 }

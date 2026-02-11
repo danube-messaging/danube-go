@@ -11,11 +11,11 @@ import (
 
 type healthCheckService struct {
 	cnxManager  *connectionManager
-	authService *AuthService
+	authService *authService
 	requestID   atomic.Uint64
 }
 
-func newHealthCheckService(cnxManager *connectionManager, authService *AuthService) *healthCheckService {
+func newHealthCheckService(cnxManager *connectionManager, authService *authService) *healthCheckService {
 	return &healthCheckService{
 		cnxManager:  cnxManager,
 		authService: authService,
@@ -63,7 +63,7 @@ func healthCheck(
 	stopSignal *atomic.Bool,
 	apiKey string,
 	addr string,
-	authService *AuthService,
+	authService *authService,
 ) error {
 	healthRequest := &proto.HealthCheckRequest{
 		RequestId: requestID,

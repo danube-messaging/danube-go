@@ -28,7 +28,7 @@ type topicProducer struct {
 	streamClient      proto.ProducerServiceClient // gRPC client used for communication with the message broker.
 	stopSignal        *atomic.Bool                // An atomic boolean signal used to indicate if the producer should stop.
 	brokerAddr        string
-	retryManager      RetryManager
+	retryManager      retryManager
 }
 
 func newTopicProducer(
@@ -39,7 +39,7 @@ func newTopicProducer(
 	dispatch_strategy *ConfigDispatchStrategy,
 	producerOptions ProducerOptions,
 ) topicProducer {
-	retryManager := NewRetryManager(producerOptions.MaxRetries, producerOptions.BaseBackoffMs, producerOptions.MaxBackoffMs)
+	retryManager := newRetryManager(producerOptions.MaxRetries, producerOptions.BaseBackoffMs, producerOptions.MaxBackoffMs)
 
 	return topicProducer{
 		client:            client,
@@ -78,17 +78,17 @@ func (p *topicProducer) create(ctx context.Context) (uint64, error) {
 			return producerID, nil
 		}
 
-		if !p.retryManager.IsRetryable(err) {
+		if !p.retryManager.isRetryable(err) {
 			return 0, err
 		}
 
 		attempts++
-		if attempts > p.retryManager.MaxRetries() {
+		if attempts > p.retryManager.maxRetriesValue() {
 			return 0, err
 		}
 
 		p.lookupNewBroker(ctx)
-		backoff := p.retryManager.CalculateBackoff(attempts - 1)
+		backoff := p.retryManager.calculateBackoff(attempts - 1)
 		time.Sleep(backoff)
 	}
 }
@@ -108,7 +108,7 @@ func (p *topicProducer) tryCreate(ctx context.Context) (uint64, error) {
 		TopicName:          p.topic,
 		SchemaRef:          p.schemaRef,
 		ProducerAccessMode: proto.ProducerAccessMode_Shared,
-		DispatchStrategy:   p.dispatch_strategy.ToProtoDispatchStrategy(),
+		DispatchStrategy:   p.dispatch_strategy.toProtoDispatchStrategy(),
 	}
 
 	ctxWithAuth, err := p.client.authService.attachTokenIfNeeded(ctx, p.client.connectionManager.connectionOptions.APIKey, p.brokerAddr)
@@ -164,7 +164,7 @@ func (p *topicProducer) lookupNewBroker(ctx context.Context) {
 // - error: An error if message sending fail
 func (p *topicProducer) send(ctx context.Context, data []byte, attributes map[string]string) (uint64, error) {
 	if p.streamClient == nil {
-		return 0, UnrecoverableError("Send: producer is not connected")
+		return 0, unrecoverableError("Send: producer is not connected")
 	}
 
 	if attributes == nil {

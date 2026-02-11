@@ -11,19 +11,18 @@ import (
 
 const tokenExpirySecs = 3600
 
-// AuthService manages authentication tokens for the Danube client.
-type AuthService struct {
+type authService struct {
 	cnxManager *connectionManager
 	mu         sync.Mutex
 	token      string
 	expiry     time.Time
 }
 
-func newAuthService(cnxManager *connectionManager) *AuthService {
-	return &AuthService{cnxManager: cnxManager}
+func newAuthService(cnxManager *connectionManager) *authService {
+	return &authService{cnxManager: cnxManager}
 }
 
-func (as *AuthService) authenticateClient(ctx context.Context, addr string, apiKey string) (string, error) {
+func (as *authService) authenticateClient(ctx context.Context, addr string, apiKey string) (string, error) {
 	conn, err := as.cnxManager.getConnection(addr, addr)
 	if err != nil {
 		return "", err
@@ -44,7 +43,7 @@ func (as *AuthService) authenticateClient(ctx context.Context, addr string, apiK
 	return token, nil
 }
 
-func (as *AuthService) getValidToken(ctx context.Context, addr string, apiKey string) (string, error) {
+func (as *authService) getValidToken(ctx context.Context, addr string, apiKey string) (string, error) {
 	as.mu.Lock()
 	token := as.token
 	expiry := as.expiry
@@ -58,7 +57,7 @@ func (as *AuthService) getValidToken(ctx context.Context, addr string, apiKey st
 }
 
 // attachTokenIfNeeded returns a context with the authorization header if apiKey is set.
-func (as *AuthService) attachTokenIfNeeded(ctx context.Context, apiKey string, addr string) (context.Context, error) {
+func (as *authService) attachTokenIfNeeded(ctx context.Context, apiKey string, addr string) (context.Context, error) {
 	if apiKey == "" {
 		return ctx, nil
 	}

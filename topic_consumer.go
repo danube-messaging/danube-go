@@ -25,7 +25,7 @@ type topicConsumer struct {
 	streamClient     proto.ConsumerServiceClient // the gRPC client used to communicate with the consumer service
 	stopSignal       *atomic.Bool                // atomic boolean flag to indicate if the consumer should be stopped
 	brokerAddr       string
-	retryManager     RetryManager
+	retryManager     retryManager
 }
 
 func newTopicConsumer(
@@ -41,7 +41,7 @@ func newTopicConsumer(
 		subscriptionType = Shared
 	}
 
-	retryManager := NewRetryManager(options.MaxRetries, options.BaseBackoffMs, options.MaxBackoffMs)
+	retryManager := newRetryManager(options.MaxRetries, options.BaseBackoffMs, options.MaxBackoffMs)
 
 	return topicConsumer{
 		client:           client,
@@ -79,17 +79,17 @@ func (c *topicConsumer) subscribe(ctx context.Context) (uint64, error) {
 			return consumerID, nil
 		}
 
-		if !c.retryManager.IsRetryable(err) {
+		if !c.retryManager.isRetryable(err) {
 			return 0, err
 		}
 
 		attempts++
-		if attempts > c.retryManager.MaxRetries() {
+		if attempts > c.retryManager.maxRetriesValue() {
 			return 0, err
 		}
 
 		c.lookupNewBroker(ctx)
-		backoff := c.retryManager.CalculateBackoff(attempts - 1)
+		backoff := c.retryManager.calculateBackoff(attempts - 1)
 		time.Sleep(backoff)
 	}
 }
@@ -146,7 +146,7 @@ func (c *topicConsumer) lookupNewBroker(ctx context.Context) {
 // - error: An error if the receive client cannot be created or if other issues occur.
 func (c *topicConsumer) receive(ctx context.Context) (proto.ConsumerService_ReceiveMessagesClient, error) {
 	if c.streamClient == nil {
-		return nil, UnrecoverableError("Receive: consumer is not connected")
+		return nil, unrecoverableError("Receive: consumer is not connected")
 	}
 
 	req := &proto.ReceiveRequest{
@@ -165,7 +165,7 @@ func (c *topicConsumer) receive(ctx context.Context) (proto.ConsumerService_Rece
 // sendAck sends an acknowledgement for a message to the broker.
 func (c *topicConsumer) sendAck(ctx context.Context, req_id uint64, msg_id *proto.MsgID, subscription_name string) (*proto.AckResponse, error) {
 	if c.streamClient == nil {
-		return nil, UnrecoverableError("SendAck: consumer is not connected")
+		return nil, unrecoverableError("SendAck: consumer is not connected")
 	}
 
 	ackReq := &proto.AckRequest{

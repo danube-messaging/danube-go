@@ -139,8 +139,9 @@ func (pb *ProducerBuilder) Build() (*Producer, error) {
 	), nil
 }
 
+// ProducerOptions configures retry behavior for producers.
 type ProducerOptions struct {
-	MaxRetries    int
-	BaseBackoffMs int64
-	MaxBackoffMs  int64
+	MaxRetries    int   // Maximum retry attempts for create/send operations.
+	BaseBackoffMs int64 // Base backoff in milliseconds.
+	MaxBackoffMs  int64 // Maximum backoff in milliseconds.
 }

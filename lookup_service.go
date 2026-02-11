@@ -8,21 +8,18 @@ import (
 	"github.com/danube-messaging/danube-go/proto" // Path to your generated proto package
 )
 
-// LookupResult holds the result of a topic lookup
-type LookupResult struct {
+type lookupResult struct {
 	ResponseType proto.TopicLookupResponse_LookupType
 	Addr         string
 }
 
-// LookupService handles lookup operations
 type lookupService struct {
 	cnxManager  *connectionManager
-	authService *AuthService
+	authService *authService
 	requestID   atomic.Uint64
 }
 
-// NewLookupService creates a new instance of LookupService
-func NewLookupService(cnxManager *connectionManager, authService *AuthService) *lookupService {
+func newLookupService(cnxManager *connectionManager, authService *authService) *lookupService {
 	return &lookupService{
 		cnxManager:  cnxManager,
 		authService: authService,
@@ -31,7 +28,7 @@ func NewLookupService(cnxManager *connectionManager, authService *AuthService) *
 }
 
 // LookupTopic performs the topic lookup request
-func (ls *lookupService) lookupTopic(ctx context.Context, addr string, topic string) (*LookupResult, error) {
+func (ls *lookupService) lookupTopic(ctx context.Context, addr string, topic string) (*lookupResult, error) {
 	conn, err := ls.cnxManager.getConnection(addr, addr)
 	if err != nil {
 		return nil, err
@@ -54,7 +51,7 @@ func (ls *lookupService) lookupTopic(ctx context.Context, addr string, topic str
 		return nil, err
 	}
 
-	return &LookupResult{
+	return &lookupResult{
 		ResponseType: response.GetResponseType(),
 		Addr:         response.GetBrokerServiceUrl(),
 	}, nil
