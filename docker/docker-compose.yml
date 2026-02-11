@@ -1,0 +1,85 @@
+# Danube single-broker setup for integration testing
+# Usage: docker-compose up -d && go test ./integration_tests/ -v -count=1
+
+services:
+  etcd:
+    container_name: "danube-test-etcd"
+    image: quay.io/coreos/etcd:v3.5.9
+    environment:
+      - ETCDCTL_API=3
+      - ETCD_NAME=danube-etcd
+      - ETCD_ADVERTISE_CLIENT_URLS=http://etcd:2379
+      - ETCD_LISTEN_CLIENT_URLS=http://0.0.0.0:2379
+      - ETCD_INITIAL_CLUSTER=danube-etcd=http://etcd:2380
+      - ETCD_LISTEN_PEER_URLS=http://0.0.0.0:2380
+      - ETCD_INITIAL_ADVERTISE_PEER_URLS=http://etcd:2380
+      - ETCD_INITIAL_CLUSTER_STATE=new
+      - ETCD_INITIAL_CLUSTER_TOKEN=danube-test
+    ports:
+      - "2379:2379"
+    networks:
+      - danube_test_net
+    volumes:
+      - etcd_data:/etcd-data
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "etcdctl",
+          "--endpoints=http://127.0.0.1:2379",
+          "endpoint",
+          "health",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  broker:
+    container_name: "danube-test-broker"
+    image: ghcr.io/danube-messaging/danube-broker:latest
+    restart: on-failure
+    depends_on:
+      etcd:
+        condition: service_healthy
+    environment:
+      - RUST_LOG=danube_broker=info,danube_core=info
+    volumes:
+      - ./danube_broker.yml:/etc/danube_broker.yml:ro
+      - broker_data:/danube-data
+    networks:
+      - danube_test_net
+    ports:
+      - "6650:6650"
+      - "50051:50051"
+      - "9040:9040"
+    command:
+      [
+        "--config-file",
+        "/etc/danube_broker.yml",
+        "--broker-addr",
+        "0.0.0.0:6650",
+        "--admin-addr",
+        "0.0.0.0:50051",
+        "--advertised-addr",
+        "127.0.0.1:6650",
+        "--prom-exporter",
+        "0.0.0.0:9040",
+      ]
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/6650'"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+networks:
+  danube_test_net:
+    name: danube_test_net
+    driver: bridge
+
+volumes:
+  etcd_data:
+    name: danube_test_etcd_data
+  broker_data:
+    name: danube_test_broker_data

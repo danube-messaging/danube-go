@@ -62,14 +62,23 @@ func runReliableBasic(t *testing.T, topicPrefix string, subType danube.SubType) 
 		}
 	}
 
-	messages := receiveMessages(t, msgChan, messageCount, 15*time.Second)
-
-	for i, msg := range messages {
-		if !bytes.Equal(msg.GetPayload(), blobData) {
-			t.Fatalf("message %d payload mismatch: got %d bytes, want %d bytes", i, len(msg.GetPayload()), len(blobData))
-		}
-		if _, err := consumer.Ack(ctx, msg); err != nil {
-			t.Fatalf("failed to ack message %d: %v", i, err)
+	// For reliable dispatch the broker waits for an ack before sending the next
+	// message, so we must ack inline during receive (matching Rust test behavior).
+	deadline := time.After(15 * time.Second)
+	for i := 0; i < messageCount; i++ {
+		select {
+		case msg, ok := <-msgChan:
+			if !ok {
+				t.Fatalf("channel closed after %d/%d messages", i, messageCount)
+			}
+			if !bytes.Equal(msg.GetPayload(), blobData) {
+				t.Fatalf("message %d payload mismatch: got %d bytes, want %d bytes", i, len(msg.GetPayload()), len(blobData))
+			}
+			if _, err := consumer.Ack(ctx, msg); err != nil {
+				t.Fatalf("failed to ack message %d: %v", i, err)
+			}
+		case <-deadline:
+			t.Fatalf("timeout: received only %d/%d messages", i, messageCount)
 		}
 	}
 }

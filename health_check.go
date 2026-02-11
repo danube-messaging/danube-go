@@ -2,11 +2,10 @@ package danube
 
 import (
 	"context"
-	"log"
 	"sync/atomic"
 	"time"
 
-	"github.com/danube-messaging/danube-go/proto" // Path to your generated proto package
+	"github.com/danube-messaging/danube-go/proto"
 )
 
 type healthCheckService struct {
@@ -38,14 +37,11 @@ func (hcs *healthCheckService) StartHealthCheck(
 	apiKey := hcs.cnxManager.connectionOptions.APIKey
 	addrCopy := addr
 
-	log.Printf("Starting Health Check Service for: %v , with id: %d", clientType, clientID)
-
 	client := proto.NewHealthCheckClient(conn.grpcConn)
 	go func() {
 		for {
 			err := healthCheck(ctx, client, hcs.requestID.Add(1), clientType, clientID, stopSignal, apiKey, addrCopy, hcs.authService)
 			if err != nil {
-				log.Printf("Error in health check: %v", err)
 				return
 			}
 			time.Sleep(5 * time.Second)
@@ -82,7 +78,6 @@ func healthCheck(
 	}
 
 	if response.GetStatus() == proto.HealthCheckResponse_CLOSE {
-		log.Printf("Received stop signal from broker in health check response")
 		stopSignal.Store(true)
 		return nil
 	}
