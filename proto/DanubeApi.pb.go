@@ -1140,12 +1140,14 @@ func (x *TopicLookupRequest) GetTopic() string {
 }
 
 type TopicLookupResponse struct {
-	state            protoimpl.MessageState         `protogen:"open.v1"`
-	RequestId        uint64                         `protobuf:"varint,3,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
-	ResponseType     TopicLookupResponse_LookupType `protobuf:"varint,4,opt,name=response_type,json=responseType,proto3,enum=danube.TopicLookupResponse_LookupType" json:"response_type,omitempty"`
-	BrokerServiceUrl string                         `protobuf:"bytes,5,opt,name=brokerServiceUrl,proto3" json:"brokerServiceUrl,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	state         protoimpl.MessageState         `protogen:"open.v1"`
+	RequestId     uint64                         `protobuf:"varint,3,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	ResponseType  TopicLookupResponse_LookupType `protobuf:"varint,4,opt,name=response_type,json=responseType,proto3,enum=danube.TopicLookupResponse_LookupType" json:"response_type,omitempty"`
+	ConnectUrl    string                         `protobuf:"bytes,5,opt,name=connect_url,json=connectUrl,proto3" json:"connect_url,omitempty"`
+	BrokerUrl     string                         `protobuf:"bytes,6,opt,name=broker_url,json=brokerUrl,proto3" json:"broker_url,omitempty"`
+	Proxy         bool                           `protobuf:"varint,7,opt,name=proxy,proto3" json:"proxy,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *TopicLookupResponse) Reset() {
@@ -1192,11 +1194,25 @@ func (x *TopicLookupResponse) GetResponseType() TopicLookupResponse_LookupType {
 	return TopicLookupResponse_Redirect
 }
 
-func (x *TopicLookupResponse) GetBrokerServiceUrl() string {
+func (x *TopicLookupResponse) GetConnectUrl() string {
 	if x != nil {
-		return x.BrokerServiceUrl
+		return x.ConnectUrl
 	}
 	return ""
+}
+
+func (x *TopicLookupResponse) GetBrokerUrl() string {
+	if x != nil {
+		return x.BrokerUrl
+	}
+	return ""
+}
+
+func (x *TopicLookupResponse) GetProxy() bool {
+	if x != nil {
+		return x.Proxy
+	}
+	return false
 }
 
 type TopicPartitionsResponse struct {
@@ -1538,12 +1554,16 @@ const file_DanubeApi_proto_rawDesc = "" +
 	"\x12TopicLookupRequest\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\x04R\trequestId\x12\x14\n" +
-	"\x05topic\x18\x02 \x01(\tR\x05topic\"\xe2\x01\n" +
+	"\x05topic\x18\x02 \x01(\tR\x05topic\"\x8c\x02\n" +
 	"\x13TopicLookupResponse\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x03 \x01(\x04R\trequestId\x12K\n" +
-	"\rresponse_type\x18\x04 \x01(\x0e2&.danube.TopicLookupResponse.LookupTypeR\fresponseType\x12*\n" +
-	"\x10brokerServiceUrl\x18\x05 \x01(\tR\x10brokerServiceUrl\"3\n" +
+	"\rresponse_type\x18\x04 \x01(\x0e2&.danube.TopicLookupResponse.LookupTypeR\fresponseType\x12\x1f\n" +
+	"\vconnect_url\x18\x05 \x01(\tR\n" +
+	"connectUrl\x12\x1d\n" +
+	"\n" +
+	"broker_url\x18\x06 \x01(\tR\tbrokerUrl\x12\x14\n" +
+	"\x05proxy\x18\a \x01(\bR\x05proxy\"3\n" +
 	"\n" +
 	"LookupType\x12\f\n" +
 	"\bRedirect\x10\x00\x12\v\n" +

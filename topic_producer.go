@@ -27,7 +27,9 @@ type topicProducer struct {
 	producerOptions   ProducerOptions             // Options that configure the behavior of the producer.
 	streamClient      proto.ProducerServiceClient // gRPC client used for communication with the message broker.
 	stopSignal        *atomic.Bool                // An atomic boolean signal used to indicate if the producer should stop.
-	brokerAddr        string
+	brokerAddr        string                      // the internal broker identity address
+	connectURL        string                      // the client-facing connect address (may be proxy)
+	proxy             bool                        // whether connection goes through a proxy
 	retryManager      retryManager
 }
 
@@ -53,6 +55,8 @@ func newTopicProducer(
 		streamClient:      nil,
 		stopSignal:        &atomic.Bool{},
 		brokerAddr:        client.URI,
+		connectURL:        client.URI,
+		proxy:             false,
 		retryManager:      retryManager,
 	}
 }
@@ -70,6 +74,11 @@ func newTopicProducer(
 // - uint64: The unique ID of the created producer if successful.
 // - error: An error if producer creation fails.
 func (p *topicProducer) create(ctx context.Context) (uint64, error) {
+	// Perform an initial topic lookup to discover the owning broker.
+	// This sets brokerAddr, connectURL, and proxy flag so that
+	// proxy routing headers are present from the very first RPC.
+	p.lookupNewBroker(ctx)
+
 	attempts := 0
 
 	for {
@@ -94,7 +103,7 @@ func (p *topicProducer) create(ctx context.Context) (uint64, error) {
 }
 
 func (p *topicProducer) tryCreate(ctx context.Context) (uint64, error) {
-	if err := p.connect(p.brokerAddr); err != nil {
+	if err := p.connect(); err != nil {
 		return 0, err
 	}
 
@@ -111,12 +120,13 @@ func (p *topicProducer) tryCreate(ctx context.Context) (uint64, error) {
 		DispatchStrategy:   p.dispatch_strategy.toProtoDispatchStrategy(),
 	}
 
-	ctxWithAuth, err := p.client.authService.attachTokenIfNeeded(ctx, p.client.connectionManager.connectionOptions.APIKey, p.brokerAddr)
+	ctxWithAuth, err := p.client.authService.attachTokenIfNeeded(ctx, p.client.connectionManager.connectionOptions.APIKey, p.connectURL)
 	if err != nil {
 		return 0, err
 	}
+	ctxWithProxy := insertProxyHeader(ctxWithAuth, p.brokerAddr, p.proxy)
 
-	resp, err := p.streamClient.CreateProducer(ctxWithAuth, req)
+	resp, err := p.streamClient.CreateProducer(ctxWithProxy, req)
 	if err != nil {
 		if status.Code(err) == codes.AlreadyExists {
 			return 0, fmt.Errorf("producer already exists: %v", err)
@@ -126,7 +136,7 @@ func (p *topicProducer) tryCreate(ctx context.Context) (uint64, error) {
 
 	p.producerID = resp.ProducerId
 
-	if err := p.client.healthCheckService.StartHealthCheck(ctx, p.brokerAddr, 0, p.producerID, p.stopSignal); err != nil {
+	if err := p.client.healthCheckService.StartHealthCheck(ctx, p.connectURL, p.brokerAddr, p.proxy, 0, p.producerID, p.stopSignal); err != nil {
 		return 0, err
 	}
 
@@ -143,8 +153,10 @@ func (p *topicProducer) tryCreate(ctx context.Context) (uint64, error) {
 }
 
 func (p *topicProducer) lookupNewBroker(ctx context.Context) {
-	if newAddr, err := p.client.lookupService.handleLookup(ctx, p.brokerAddr, p.topic); err == nil {
-		p.brokerAddr = newAddr
+	if addr, err := p.client.lookupService.handleLookup(ctx, p.connectURL, p.topic); err == nil {
+		p.brokerAddr = addr.BrokerURL
+		p.connectURL = addr.ConnectURL
+		p.proxy = addr.Proxy
 	}
 }
 
@@ -191,12 +203,13 @@ func (p *topicProducer) send(ctx context.Context, data []byte, attributes map[st
 		SchemaVersion:    p.schemaVersion,
 	}
 
-	ctxWithAuth, err := p.client.authService.attachTokenIfNeeded(ctx, p.client.connectionManager.connectionOptions.APIKey, p.brokerAddr)
+	ctxWithAuth, err := p.client.authService.attachTokenIfNeeded(ctx, p.client.connectionManager.connectionOptions.APIKey, p.connectURL)
 	if err != nil {
 		return 0, err
 	}
+	ctxWithProxy := insertProxyHeader(ctxWithAuth, p.brokerAddr, p.proxy)
 
-	res, err := p.streamClient.SendMessage(ctxWithAuth, req)
+	res, err := p.streamClient.SendMessage(ctxWithProxy, req)
 	if err != nil {
 		return 0, err
 	}
@@ -204,8 +217,8 @@ func (p *topicProducer) send(ctx context.Context, data []byte, attributes map[st
 	return res.RequestId, nil
 }
 
-func (p *topicProducer) connect(addr string) error {
-	conn, err := p.client.connectionManager.getConnection(addr, addr)
+func (p *topicProducer) connect() error {
+	conn, err := p.client.connectionManager.getConnection(p.brokerAddr, p.connectURL)
 	if err != nil {
 		return err
 	}

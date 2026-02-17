@@ -24,23 +24,27 @@ func newHealthCheckService(cnxManager *connectionManager, authService *authServi
 
 func (hcs *healthCheckService) StartHealthCheck(
 	ctx context.Context,
-	addr string,
+	connectURL string,
+	brokerAddr string,
+	proxy bool,
 	clientType int32,
 	clientID uint64,
 	stopSignal *atomic.Bool,
 ) error {
-	conn, err := hcs.cnxManager.getConnection(addr, addr)
+	conn, err := hcs.cnxManager.getConnection(brokerAddr, connectURL)
 	if err != nil {
 		return err
 	}
 
 	apiKey := hcs.cnxManager.connectionOptions.APIKey
-	addrCopy := addr
+	connectURLCopy := connectURL
+	brokerAddrCopy := brokerAddr
+	proxyCopy := proxy
 
 	client := proto.NewHealthCheckClient(conn.grpcConn)
 	go func() {
 		for {
-			err := healthCheck(ctx, client, hcs.requestID.Add(1), clientType, clientID, stopSignal, apiKey, addrCopy, hcs.authService)
+			err := healthCheck(ctx, client, hcs.requestID.Add(1), clientType, clientID, stopSignal, apiKey, connectURLCopy, brokerAddrCopy, proxyCopy, hcs.authService)
 			if err != nil {
 				return
 			}
@@ -58,7 +62,9 @@ func healthCheck(
 	clientID uint64,
 	stopSignal *atomic.Bool,
 	apiKey string,
-	addr string,
+	connectURL string,
+	brokerAddr string,
+	proxy bool,
 	authService *authService,
 ) error {
 	healthRequest := &proto.HealthCheckRequest{
@@ -67,12 +73,13 @@ func healthCheck(
 		Id:        clientID,
 	}
 
-	ctxWithAuth, err := authService.attachTokenIfNeeded(ctx, apiKey, addr)
+	ctxWithAuth, err := authService.attachTokenIfNeeded(ctx, apiKey, connectURL)
 	if err != nil {
 		return err
 	}
+	ctxWithProxy := insertProxyHeader(ctxWithAuth, brokerAddr, proxy)
 
-	response, err := client.HealthCheck(ctxWithAuth, healthRequest)
+	response, err := client.HealthCheck(ctxWithProxy, healthRequest)
 	if err != nil {
 		return err
 	}

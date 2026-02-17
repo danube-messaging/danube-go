@@ -211,11 +211,13 @@ func (p *Producer) recreateProducer(ctx context.Context, partitionID int32) erro
 
 func (p *Producer) lookupAndRecreate(ctx context.Context, partitionID int32, originalErr error) error {
 	producer := p.producers[partitionID]
-	newAddr, err := producer.client.lookupService.handleLookup(ctx, producer.brokerAddr, producer.topic)
+	addr, err := producer.client.lookupService.handleLookup(ctx, producer.connectURL, producer.topic)
 	if err != nil {
 		return originalErr
 	}
-	producer.brokerAddr = newAddr
+	producer.brokerAddr = addr.BrokerURL
+	producer.connectURL = addr.ConnectURL
+	producer.proxy = addr.Proxy
 	_, err = producer.create(ctx)
 	return err
 }
