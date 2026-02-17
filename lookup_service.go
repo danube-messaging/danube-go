@@ -10,7 +10,9 @@ import (
 
 type lookupResult struct {
 	ResponseType proto.TopicLookupResponse_LookupType
-	Addr         string
+	ConnectURL   string
+	BrokerURL    string
+	Proxy        bool
 }
 
 type lookupService struct {
@@ -53,7 +55,9 @@ func (ls *lookupService) lookupTopic(ctx context.Context, addr string, topic str
 
 	return &lookupResult{
 		ResponseType: response.GetResponseType(),
-		Addr:         response.GetBrokerServiceUrl(),
+		ConnectURL:   response.GetConnectUrl(),
+		BrokerURL:    response.GetBrokerUrl(),
+		Proxy:        response.GetProxy(),
 	}, nil
 }
 
@@ -85,21 +89,23 @@ func (ls *lookupService) topicPartitions(ctx context.Context, addr string, topic
 
 }
 
-// HandleLookup processes the lookup request and returns the appropriate URI
-func (ls *lookupService) handleLookup(ctx context.Context, addr string, topic string) (string, error) {
+// handleLookup processes the lookup request and returns the broker address with connect/broker URLs and proxy flag.
+func (ls *lookupService) handleLookup(ctx context.Context, addr string, topic string) (*brokerAddress, error) {
 	lookupResult, err := ls.lookupTopic(ctx, addr, topic)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	switch lookupResult.ResponseType {
-	case proto.TopicLookupResponse_Redirect:
-		return lookupResult.Addr, nil
-	case proto.TopicLookupResponse_Connect:
-		return addr, nil
+	case proto.TopicLookupResponse_Redirect, proto.TopicLookupResponse_Connect:
+		return &brokerAddress{
+			ConnectURL: lookupResult.ConnectURL,
+			BrokerURL:  lookupResult.BrokerURL,
+			Proxy:      lookupResult.Proxy,
+		}, nil
 	case proto.TopicLookupResponse_Failed:
-		return "", errors.New("lookup failed")
+		return nil, errors.New("topic lookup failed: topic may not exist or cluster is unavailable")
 	default:
-		return "", errors.New("unknown lookup type")
+		return nil, errors.New("unknown lookup type")
 	}
 }

@@ -24,7 +24,9 @@ type topicConsumer struct {
 	requestID        atomic.Uint64               // atomic counter for generating unique request IDs
 	streamClient     proto.ConsumerServiceClient // the gRPC client used to communicate with the consumer service
 	stopSignal       *atomic.Bool                // atomic boolean flag to indicate if the consumer should be stopped
-	brokerAddr       string
+	brokerAddr       string                      // the internal broker identity address
+	connectURL       string                      // the client-facing connect address (may be proxy)
+	proxy            bool                        // whether connection goes through a proxy
 	retryManager     retryManager
 }
 
@@ -52,6 +54,8 @@ func newTopicConsumer(
 		consumerOptions:  options,
 		stopSignal:       &atomic.Bool{},
 		brokerAddr:       client.URI,
+		connectURL:       client.URI,
+		proxy:            false,
 		retryManager:     retryManager,
 	}
 }
@@ -71,6 +75,11 @@ func (c *topicConsumer) stop() {
 // - uint64: The unique identifier assigned to the consumer by the broker.
 // - error: An error if the subscription fails or if initialization encounters issues.
 func (c *topicConsumer) subscribe(ctx context.Context) (uint64, error) {
+	// Perform an initial topic lookup to discover the owning broker.
+	// This sets brokerAddr, connectURL, and proxy flag so that
+	// proxy routing headers are present from the very first RPC.
+	c.lookupNewBroker(ctx)
+
 	attempts := 0
 
 	for {
@@ -95,7 +104,7 @@ func (c *topicConsumer) subscribe(ctx context.Context) (uint64, error) {
 }
 
 func (c *topicConsumer) trySubscribe(ctx context.Context) (uint64, error) {
-	if err := c.connect(c.brokerAddr); err != nil {
+	if err := c.connect(); err != nil {
 		return 0, err
 	}
 
@@ -107,12 +116,13 @@ func (c *topicConsumer) trySubscribe(ctx context.Context) (uint64, error) {
 		SubscriptionType: proto.ConsumerRequest_SubscriptionType(c.subscriptionType),
 	}
 
-	ctxWithAuth, err := c.client.authService.attachTokenIfNeeded(ctx, c.client.connectionManager.connectionOptions.APIKey, c.brokerAddr)
+	ctxWithAuth, err := c.client.authService.attachTokenIfNeeded(ctx, c.client.connectionManager.connectionOptions.APIKey, c.connectURL)
 	if err != nil {
 		return 0, err
 	}
+	ctxWithProxy := insertProxyHeader(ctxWithAuth, c.brokerAddr, c.proxy)
 
-	resp, err := c.streamClient.Subscribe(ctxWithAuth, req)
+	resp, err := c.streamClient.Subscribe(ctxWithProxy, req)
 	if err != nil {
 		if status.Code(err) == codes.AlreadyExists {
 			return 0, fmt.Errorf("consumer already exists: %v", err)
@@ -122,7 +132,7 @@ func (c *topicConsumer) trySubscribe(ctx context.Context) (uint64, error) {
 
 	c.consumerID = resp.GetConsumerId()
 
-	if err := c.client.healthCheckService.StartHealthCheck(ctx, c.brokerAddr, 1, c.consumerID, c.stopSignal); err != nil {
+	if err := c.client.healthCheckService.StartHealthCheck(ctx, c.connectURL, c.brokerAddr, c.proxy, 1, c.consumerID, c.stopSignal); err != nil {
 		return 0, err
 	}
 
@@ -130,8 +140,10 @@ func (c *topicConsumer) trySubscribe(ctx context.Context) (uint64, error) {
 }
 
 func (c *topicConsumer) lookupNewBroker(ctx context.Context) {
-	if newAddr, err := c.client.lookupService.handleLookup(ctx, c.brokerAddr, c.topicName); err == nil {
-		c.brokerAddr = newAddr
+	if addr, err := c.client.lookupService.handleLookup(ctx, c.connectURL, c.topicName); err == nil {
+		c.brokerAddr = addr.BrokerURL
+		c.connectURL = addr.ConnectURL
+		c.proxy = addr.Proxy
 	}
 }
 
@@ -154,12 +166,13 @@ func (c *topicConsumer) receive(ctx context.Context) (proto.ConsumerService_Rece
 		ConsumerId: c.consumerID,
 	}
 
-	ctxWithAuth, err := c.client.authService.attachTokenIfNeeded(ctx, c.client.connectionManager.connectionOptions.APIKey, c.brokerAddr)
+	ctxWithAuth, err := c.client.authService.attachTokenIfNeeded(ctx, c.client.connectionManager.connectionOptions.APIKey, c.connectURL)
 	if err != nil {
 		return nil, err
 	}
+	ctxWithProxy := insertProxyHeader(ctxWithAuth, c.brokerAddr, c.proxy)
 
-	return c.streamClient.ReceiveMessages(ctxWithAuth, req)
+	return c.streamClient.ReceiveMessages(ctxWithProxy, req)
 }
 
 // sendAck sends an acknowledgement for a message to the broker.
@@ -174,20 +187,20 @@ func (c *topicConsumer) sendAck(ctx context.Context, req_id uint64, msg_id *prot
 		SubscriptionName: subscription_name,
 	}
 
-	ctxWithAuth, err := c.client.authService.attachTokenIfNeeded(ctx, c.client.connectionManager.connectionOptions.APIKey, c.brokerAddr)
+	ctxWithAuth, err := c.client.authService.attachTokenIfNeeded(ctx, c.client.connectionManager.connectionOptions.APIKey, c.connectURL)
 	if err != nil {
 		return nil, err
 	}
+	ctxWithProxy := insertProxyHeader(ctxWithAuth, c.brokerAddr, c.proxy)
 
-	return c.streamClient.Ack(ctxWithAuth, ackReq)
+	return c.streamClient.Ack(ctxWithProxy, ackReq)
 }
 
-func (c *topicConsumer) connect(addr string) error {
-	conn, err := c.client.connectionManager.getConnection(addr, addr)
+func (c *topicConsumer) connect() error {
+	conn, err := c.client.connectionManager.getConnection(c.brokerAddr, c.connectURL)
 	if err != nil {
 		return err
 	}
-	c.brokerAddr = addr
 	c.streamClient = proto.NewConsumerServiceClient(conn.grpcConn)
 	return nil
 }

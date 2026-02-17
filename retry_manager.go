@@ -1,10 +1,12 @@
 package danube
 
 import (
+	"context"
 	"math/rand"
 	"time"
 
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
@@ -52,6 +54,16 @@ func (rm retryManager) isRetryable(err error) bool {
 	default:
 		return false
 	}
+}
+
+// insertProxyHeader returns a context with the x-danube-broker-url metadata header
+// when proxy mode is active. The proxy uses this header to route the gRPC call
+// to the correct backend broker.
+func insertProxyHeader(ctx context.Context, brokerURL string, proxy bool) context.Context {
+	if proxy {
+		return metadata.AppendToOutgoingContext(ctx, "x-danube-broker-url", brokerURL)
+	}
+	return ctx
 }
 
 func (rm retryManager) calculateBackoff(attempt int) time.Duration {
