@@ -18,7 +18,7 @@ docker compose up -d
 
 ```bash
 docker compose ps
-# Both etcd and broker should show "Up" / "healthy"
+# The broker should show "Up" / "healthy"
 ```
 
 ## Run Integration Tests
@@ -42,7 +42,7 @@ docker compose down -v   # -v removes volumes for a fresh start
 
 ## Architecture
 
-- **ETCD** — metadata store on port 2379
+- **Embedded Raft metadata store** — no external dependency required
 - **Single broker** — gRPC on port 6650, admin on 50051
 - No TLS, no auth, filesystem backend
 - Broker advertises as `127.0.0.1:6650` so topic lookups resolve from the host
