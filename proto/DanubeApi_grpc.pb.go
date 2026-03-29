@@ -166,6 +166,7 @@ const (
 	ConsumerService_Subscribe_FullMethodName       = "/danube.ConsumerService/Subscribe"
 	ConsumerService_ReceiveMessages_FullMethodName = "/danube.ConsumerService/ReceiveMessages"
 	ConsumerService_Ack_FullMethodName             = "/danube.ConsumerService/Ack"
+	ConsumerService_Nack_FullMethodName            = "/danube.ConsumerService/Nack"
 )
 
 // ConsumerServiceClient is the client API for ConsumerService service.
@@ -178,6 +179,8 @@ type ConsumerServiceClient interface {
 	ReceiveMessages(ctx context.Context, in *ReceiveRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[StreamMessage], error)
 	// Acknowledges receipt of a message from the Consumer
 	Ack(ctx context.Context, in *AckRequest, opts ...grpc.CallOption) (*AckResponse, error)
+	// Negative acknowledgment for a message from the Consumer
+	Nack(ctx context.Context, in *NackRequest, opts ...grpc.CallOption) (*NackResponse, error)
 }
 
 type consumerServiceClient struct {
@@ -227,6 +230,16 @@ func (c *consumerServiceClient) Ack(ctx context.Context, in *AckRequest, opts ..
 	return out, nil
 }
 
+func (c *consumerServiceClient) Nack(ctx context.Context, in *NackRequest, opts ...grpc.CallOption) (*NackResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(NackResponse)
+	err := c.cc.Invoke(ctx, ConsumerService_Nack_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ConsumerServiceServer is the server API for ConsumerService service.
 // All implementations must embed UnimplementedConsumerServiceServer
 // for forward compatibility.
@@ -237,6 +250,8 @@ type ConsumerServiceServer interface {
 	ReceiveMessages(*ReceiveRequest, grpc.ServerStreamingServer[StreamMessage]) error
 	// Acknowledges receipt of a message from the Consumer
 	Ack(context.Context, *AckRequest) (*AckResponse, error)
+	// Negative acknowledgment for a message from the Consumer
+	Nack(context.Context, *NackRequest) (*NackResponse, error)
 	mustEmbedUnimplementedConsumerServiceServer()
 }
 
@@ -255,6 +270,9 @@ func (UnimplementedConsumerServiceServer) ReceiveMessages(*ReceiveRequest, grpc.
 }
 func (UnimplementedConsumerServiceServer) Ack(context.Context, *AckRequest) (*AckResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Ack not implemented")
+}
+func (UnimplementedConsumerServiceServer) Nack(context.Context, *NackRequest) (*NackResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Nack not implemented")
 }
 func (UnimplementedConsumerServiceServer) mustEmbedUnimplementedConsumerServiceServer() {}
 func (UnimplementedConsumerServiceServer) testEmbeddedByValue()                         {}
@@ -324,6 +342,24 @@ func _ConsumerService_Ack_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ConsumerService_Nack_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(NackRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ConsumerServiceServer).Nack(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ConsumerService_Nack_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ConsumerServiceServer).Nack(ctx, req.(*NackRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ConsumerService_ServiceDesc is the grpc.ServiceDesc for ConsumerService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -338,6 +374,10 @@ var ConsumerService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Ack",
 			Handler:    _ConsumerService_Ack_Handler,
+		},
+		{
+			MethodName: "Nack",
+			Handler:    _ConsumerService_Nack_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

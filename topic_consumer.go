@@ -196,6 +196,29 @@ func (c *topicConsumer) sendAck(ctx context.Context, req_id uint64, msg_id *prot
 	return c.streamClient.Ack(ctxWithProxy, ackReq)
 }
 
+// sendNack sends a negative acknowledgement for a message to the broker.
+func (c *topicConsumer) sendNack(ctx context.Context, req_id uint64, msg_id *proto.MsgID, subscription_name string, delay_ms *uint64, reason *string) (*proto.NackResponse, error) {
+	if c.streamClient == nil {
+		return nil, unrecoverableError("SendNack: consumer is not connected")
+	}
+
+	nackReq := &proto.NackRequest{
+		RequestId:        req_id,
+		MsgId:            msg_id,
+		SubscriptionName: subscription_name,
+		DelayMs:          delay_ms,
+		Reason:           reason,
+	}
+
+	ctxWithAuth, err := c.client.authService.attachTokenIfNeeded(ctx, c.client.connectionManager.connectionOptions.APIKey, c.connectURL)
+	if err != nil {
+		return nil, err
+	}
+	ctxWithProxy := insertProxyHeader(ctxWithAuth, c.brokerAddr, c.proxy)
+
+	return c.streamClient.Nack(ctxWithProxy, nackReq)
+}
+
 func (c *topicConsumer) connect() error {
 	conn, err := c.client.connectionManager.getConnection(c.brokerAddr, c.connectURL)
 	if err != nil {
