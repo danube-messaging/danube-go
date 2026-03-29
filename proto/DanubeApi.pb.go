@@ -208,7 +208,7 @@ func (x TopicLookupResponse_LookupType) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use TopicLookupResponse_LookupType.Descriptor instead.
 func (TopicLookupResponse_LookupType) EnumDescriptor() ([]byte, []int) {
-	return file_DanubeApi_proto_rawDescGZIP(), []int{12, 0}
+	return file_DanubeApi_proto_rawDescGZIP(), []int{14, 0}
 }
 
 type HealthCheckRequest_ClientType int32
@@ -254,7 +254,7 @@ func (x HealthCheckRequest_ClientType) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use HealthCheckRequest_ClientType.Descriptor instead.
 func (HealthCheckRequest_ClientType) EnumDescriptor() ([]byte, []int) {
-	return file_DanubeApi_proto_rawDescGZIP(), []int{14, 0}
+	return file_DanubeApi_proto_rawDescGZIP(), []int{16, 0}
 }
 
 type HealthCheckResponse_ClientStatus int32
@@ -300,7 +300,7 @@ func (x HealthCheckResponse_ClientStatus) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use HealthCheckResponse_ClientStatus.Descriptor instead.
 func (HealthCheckResponse_ClientStatus) EnumDescriptor() ([]byte, []int) {
-	return file_DanubeApi_proto_rawDescGZIP(), []int{15, 0}
+	return file_DanubeApi_proto_rawDescGZIP(), []int{17, 0}
 }
 
 // Create Producer request
@@ -1087,6 +1087,128 @@ func (x *AckResponse) GetRequestId() uint64 {
 	return 0
 }
 
+type NackRequest struct {
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	RequestId uint64                 `protobuf:"varint,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	// Identifies the message, associated with a unique topic, subscription and the broker
+	MsgId *MsgID `protobuf:"bytes,2,opt,name=msg_id,json=msgId,proto3" json:"msg_id,omitempty"`
+	// Subscription name the consumer is subscribed to
+	SubscriptionName string  `protobuf:"bytes,3,opt,name=subscription_name,json=subscriptionName,proto3" json:"subscription_name,omitempty"`
+	DelayMs          *uint64 `protobuf:"varint,4,opt,name=delay_ms,json=delayMs,proto3,oneof" json:"delay_ms,omitempty"`
+	Reason           *string `protobuf:"bytes,5,opt,name=reason,proto3,oneof" json:"reason,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *NackRequest) Reset() {
+	*x = NackRequest{}
+	mi := &file_DanubeApi_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *NackRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*NackRequest) ProtoMessage() {}
+
+func (x *NackRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_DanubeApi_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use NackRequest.ProtoReflect.Descriptor instead.
+func (*NackRequest) Descriptor() ([]byte, []int) {
+	return file_DanubeApi_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *NackRequest) GetRequestId() uint64 {
+	if x != nil {
+		return x.RequestId
+	}
+	return 0
+}
+
+func (x *NackRequest) GetMsgId() *MsgID {
+	if x != nil {
+		return x.MsgId
+	}
+	return nil
+}
+
+func (x *NackRequest) GetSubscriptionName() string {
+	if x != nil {
+		return x.SubscriptionName
+	}
+	return ""
+}
+
+func (x *NackRequest) GetDelayMs() uint64 {
+	if x != nil && x.DelayMs != nil {
+		return *x.DelayMs
+	}
+	return 0
+}
+
+func (x *NackRequest) GetReason() string {
+	if x != nil && x.Reason != nil {
+		return *x.Reason
+	}
+	return ""
+}
+
+type NackResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RequestId     uint64                 `protobuf:"varint,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *NackResponse) Reset() {
+	*x = NackResponse{}
+	mi := &file_DanubeApi_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *NackResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*NackResponse) ProtoMessage() {}
+
+func (x *NackResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_DanubeApi_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use NackResponse.ProtoReflect.Descriptor instead.
+func (*NackResponse) Descriptor() ([]byte, []int) {
+	return file_DanubeApi_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *NackResponse) GetRequestId() uint64 {
+	if x != nil {
+		return x.RequestId
+	}
+	return 0
+}
+
 type TopicLookupRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	RequestId     uint64                 `protobuf:"varint,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
@@ -1097,7 +1219,7 @@ type TopicLookupRequest struct {
 
 func (x *TopicLookupRequest) Reset() {
 	*x = TopicLookupRequest{}
-	mi := &file_DanubeApi_proto_msgTypes[11]
+	mi := &file_DanubeApi_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1109,7 +1231,7 @@ func (x *TopicLookupRequest) String() string {
 func (*TopicLookupRequest) ProtoMessage() {}
 
 func (x *TopicLookupRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_DanubeApi_proto_msgTypes[11]
+	mi := &file_DanubeApi_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1122,7 +1244,7 @@ func (x *TopicLookupRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TopicLookupRequest.ProtoReflect.Descriptor instead.
 func (*TopicLookupRequest) Descriptor() ([]byte, []int) {
-	return file_DanubeApi_proto_rawDescGZIP(), []int{11}
+	return file_DanubeApi_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *TopicLookupRequest) GetRequestId() uint64 {
@@ -1152,7 +1274,7 @@ type TopicLookupResponse struct {
 
 func (x *TopicLookupResponse) Reset() {
 	*x = TopicLookupResponse{}
-	mi := &file_DanubeApi_proto_msgTypes[12]
+	mi := &file_DanubeApi_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1164,7 +1286,7 @@ func (x *TopicLookupResponse) String() string {
 func (*TopicLookupResponse) ProtoMessage() {}
 
 func (x *TopicLookupResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_DanubeApi_proto_msgTypes[12]
+	mi := &file_DanubeApi_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1177,7 +1299,7 @@ func (x *TopicLookupResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TopicLookupResponse.ProtoReflect.Descriptor instead.
 func (*TopicLookupResponse) Descriptor() ([]byte, []int) {
-	return file_DanubeApi_proto_rawDescGZIP(), []int{12}
+	return file_DanubeApi_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *TopicLookupResponse) GetRequestId() uint64 {
@@ -1225,7 +1347,7 @@ type TopicPartitionsResponse struct {
 
 func (x *TopicPartitionsResponse) Reset() {
 	*x = TopicPartitionsResponse{}
-	mi := &file_DanubeApi_proto_msgTypes[13]
+	mi := &file_DanubeApi_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1237,7 +1359,7 @@ func (x *TopicPartitionsResponse) String() string {
 func (*TopicPartitionsResponse) ProtoMessage() {}
 
 func (x *TopicPartitionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_DanubeApi_proto_msgTypes[13]
+	mi := &file_DanubeApi_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1250,7 +1372,7 @@ func (x *TopicPartitionsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TopicPartitionsResponse.ProtoReflect.Descriptor instead.
 func (*TopicPartitionsResponse) Descriptor() ([]byte, []int) {
-	return file_DanubeApi_proto_rawDescGZIP(), []int{13}
+	return file_DanubeApi_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *TopicPartitionsResponse) GetRequestId() uint64 {
@@ -1278,7 +1400,7 @@ type HealthCheckRequest struct {
 
 func (x *HealthCheckRequest) Reset() {
 	*x = HealthCheckRequest{}
-	mi := &file_DanubeApi_proto_msgTypes[14]
+	mi := &file_DanubeApi_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1290,7 +1412,7 @@ func (x *HealthCheckRequest) String() string {
 func (*HealthCheckRequest) ProtoMessage() {}
 
 func (x *HealthCheckRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_DanubeApi_proto_msgTypes[14]
+	mi := &file_DanubeApi_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1303,7 +1425,7 @@ func (x *HealthCheckRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HealthCheckRequest.ProtoReflect.Descriptor instead.
 func (*HealthCheckRequest) Descriptor() ([]byte, []int) {
-	return file_DanubeApi_proto_rawDescGZIP(), []int{14}
+	return file_DanubeApi_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *HealthCheckRequest) GetRequestId() uint64 {
@@ -1336,7 +1458,7 @@ type HealthCheckResponse struct {
 
 func (x *HealthCheckResponse) Reset() {
 	*x = HealthCheckResponse{}
-	mi := &file_DanubeApi_proto_msgTypes[15]
+	mi := &file_DanubeApi_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1348,7 +1470,7 @@ func (x *HealthCheckResponse) String() string {
 func (*HealthCheckResponse) ProtoMessage() {}
 
 func (x *HealthCheckResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_DanubeApi_proto_msgTypes[15]
+	mi := &file_DanubeApi_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1361,7 +1483,7 @@ func (x *HealthCheckResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HealthCheckResponse.ProtoReflect.Descriptor instead.
 func (*HealthCheckResponse) Descriptor() ([]byte, []int) {
-	return file_DanubeApi_proto_rawDescGZIP(), []int{15}
+	return file_DanubeApi_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *HealthCheckResponse) GetStatus() HealthCheckResponse_ClientStatus {
@@ -1380,7 +1502,7 @@ type AuthRequest struct {
 
 func (x *AuthRequest) Reset() {
 	*x = AuthRequest{}
-	mi := &file_DanubeApi_proto_msgTypes[16]
+	mi := &file_DanubeApi_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1392,7 +1514,7 @@ func (x *AuthRequest) String() string {
 func (*AuthRequest) ProtoMessage() {}
 
 func (x *AuthRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_DanubeApi_proto_msgTypes[16]
+	mi := &file_DanubeApi_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1405,7 +1527,7 @@ func (x *AuthRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AuthRequest.ProtoReflect.Descriptor instead.
 func (*AuthRequest) Descriptor() ([]byte, []int) {
-	return file_DanubeApi_proto_rawDescGZIP(), []int{16}
+	return file_DanubeApi_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *AuthRequest) GetApiKey() string {
@@ -1424,7 +1546,7 @@ type AuthResponse struct {
 
 func (x *AuthResponse) Reset() {
 	*x = AuthResponse{}
-	mi := &file_DanubeApi_proto_msgTypes[17]
+	mi := &file_DanubeApi_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1436,7 +1558,7 @@ func (x *AuthResponse) String() string {
 func (*AuthResponse) ProtoMessage() {}
 
 func (x *AuthResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_DanubeApi_proto_msgTypes[17]
+	mi := &file_DanubeApi_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1449,7 +1571,7 @@ func (x *AuthResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AuthResponse.ProtoReflect.Descriptor instead.
 func (*AuthResponse) Descriptor() ([]byte, []int) {
-	return file_DanubeApi_proto_rawDescGZIP(), []int{17}
+	return file_DanubeApi_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *AuthResponse) GetToken() string {
@@ -1550,6 +1672,18 @@ const file_DanubeApi_proto_rawDesc = "" +
 	"\x11subscription_name\x18\x03 \x01(\tR\x10subscriptionName\",\n" +
 	"\vAckResponse\x12\x1d\n" +
 	"\n" +
+	"request_id\x18\x01 \x01(\x04R\trequestId\"\xd4\x01\n" +
+	"\vNackRequest\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x01 \x01(\x04R\trequestId\x12$\n" +
+	"\x06msg_id\x18\x02 \x01(\v2\r.danube.MsgIDR\x05msgId\x12+\n" +
+	"\x11subscription_name\x18\x03 \x01(\tR\x10subscriptionName\x12\x1e\n" +
+	"\bdelay_ms\x18\x04 \x01(\x04H\x00R\adelayMs\x88\x01\x01\x12\x1b\n" +
+	"\x06reason\x18\x05 \x01(\tH\x01R\x06reason\x88\x01\x01B\v\n" +
+	"\t_delay_msB\t\n" +
+	"\a_reason\"-\n" +
+	"\fNackResponse\x12\x1d\n" +
+	"\n" +
 	"request_id\x18\x01 \x01(\x04R\trequestId\"I\n" +
 	"\x12TopicLookupRequest\x12\x1d\n" +
 	"\n" +
@@ -1603,11 +1737,12 @@ const file_DanubeApi_proto_rawDesc = "" +
 	"\bReliable\x10\x012\x95\x01\n" +
 	"\x0fProducerService\x12C\n" +
 	"\x0eCreateProducer\x12\x17.danube.ProducerRequest\x1a\x18.danube.ProducerResponse\x12=\n" +
-	"\vSendMessage\x12\x15.danube.StreamMessage\x1a\x17.danube.MessageResponse2\xc5\x01\n" +
+	"\vSendMessage\x12\x15.danube.StreamMessage\x1a\x17.danube.MessageResponse2\xf8\x01\n" +
 	"\x0fConsumerService\x12>\n" +
 	"\tSubscribe\x12\x17.danube.ConsumerRequest\x1a\x18.danube.ConsumerResponse\x12B\n" +
 	"\x0fReceiveMessages\x12\x16.danube.ReceiveRequest\x1a\x15.danube.StreamMessage0\x01\x12.\n" +
-	"\x03Ack\x12\x12.danube.AckRequest\x1a\x13.danube.AckResponse2\xa3\x01\n" +
+	"\x03Ack\x12\x12.danube.AckRequest\x1a\x13.danube.AckResponse\x121\n" +
+	"\x04Nack\x12\x13.danube.NackRequest\x1a\x14.danube.NackResponse2\xa3\x01\n" +
 	"\tDiscovery\x12F\n" +
 	"\vTopicLookup\x12\x1a.danube.TopicLookupRequest\x1a\x1b.danube.TopicLookupResponse\x12N\n" +
 	"\x0fTopicPartitions\x12\x1a.danube.TopicLookupRequest\x1a\x1f.danube.TopicPartitionsResponse2U\n" +
@@ -1629,7 +1764,7 @@ func file_DanubeApi_proto_rawDescGZIP() []byte {
 }
 
 var file_DanubeApi_proto_enumTypes = make([]protoimpl.EnumInfo, 6)
-var file_DanubeApi_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
+var file_DanubeApi_proto_msgTypes = make([]protoimpl.MessageInfo, 21)
 var file_DanubeApi_proto_goTypes = []any{
 	(ProducerAccessMode)(0),               // 0: danube.ProducerAccessMode
 	(DispatchStrategy)(0),                 // 1: danube.DispatchStrategy
@@ -1648,14 +1783,16 @@ var file_DanubeApi_proto_goTypes = []any{
 	(*MsgID)(nil),                         // 14: danube.MsgID
 	(*AckRequest)(nil),                    // 15: danube.AckRequest
 	(*AckResponse)(nil),                   // 16: danube.AckResponse
-	(*TopicLookupRequest)(nil),            // 17: danube.TopicLookupRequest
-	(*TopicLookupResponse)(nil),           // 18: danube.TopicLookupResponse
-	(*TopicPartitionsResponse)(nil),       // 19: danube.TopicPartitionsResponse
-	(*HealthCheckRequest)(nil),            // 20: danube.HealthCheckRequest
-	(*HealthCheckResponse)(nil),           // 21: danube.HealthCheckResponse
-	(*AuthRequest)(nil),                   // 22: danube.AuthRequest
-	(*AuthResponse)(nil),                  // 23: danube.AuthResponse
-	nil,                                   // 24: danube.StreamMessage.AttributesEntry
+	(*NackRequest)(nil),                   // 17: danube.NackRequest
+	(*NackResponse)(nil),                  // 18: danube.NackResponse
+	(*TopicLookupRequest)(nil),            // 19: danube.TopicLookupRequest
+	(*TopicLookupResponse)(nil),           // 20: danube.TopicLookupResponse
+	(*TopicPartitionsResponse)(nil),       // 21: danube.TopicPartitionsResponse
+	(*HealthCheckRequest)(nil),            // 22: danube.HealthCheckRequest
+	(*HealthCheckResponse)(nil),           // 23: danube.HealthCheckResponse
+	(*AuthRequest)(nil),                   // 24: danube.AuthRequest
+	(*AuthResponse)(nil),                  // 25: danube.AuthResponse
+	nil,                                   // 26: danube.StreamMessage.AttributesEntry
 }
 var file_DanubeApi_proto_depIdxs = []int32{
 	7,  // 0: danube.ProducerRequest.schema_ref:type_name -> danube.SchemaReference
@@ -1663,34 +1800,37 @@ var file_DanubeApi_proto_depIdxs = []int32{
 	1,  // 2: danube.ProducerRequest.dispatch_strategy:type_name -> danube.DispatchStrategy
 	2,  // 3: danube.ConsumerRequest.subscription_type:type_name -> danube.ConsumerRequest.SubscriptionType
 	14, // 4: danube.StreamMessage.msg_id:type_name -> danube.MsgID
-	24, // 5: danube.StreamMessage.attributes:type_name -> danube.StreamMessage.AttributesEntry
+	26, // 5: danube.StreamMessage.attributes:type_name -> danube.StreamMessage.AttributesEntry
 	14, // 6: danube.AckRequest.msg_id:type_name -> danube.MsgID
-	3,  // 7: danube.TopicLookupResponse.response_type:type_name -> danube.TopicLookupResponse.LookupType
-	4,  // 8: danube.HealthCheckRequest.client:type_name -> danube.HealthCheckRequest.ClientType
-	5,  // 9: danube.HealthCheckResponse.status:type_name -> danube.HealthCheckResponse.ClientStatus
-	6,  // 10: danube.ProducerService.CreateProducer:input_type -> danube.ProducerRequest
-	13, // 11: danube.ProducerService.SendMessage:input_type -> danube.StreamMessage
-	10, // 12: danube.ConsumerService.Subscribe:input_type -> danube.ConsumerRequest
-	12, // 13: danube.ConsumerService.ReceiveMessages:input_type -> danube.ReceiveRequest
-	15, // 14: danube.ConsumerService.Ack:input_type -> danube.AckRequest
-	17, // 15: danube.Discovery.TopicLookup:input_type -> danube.TopicLookupRequest
-	17, // 16: danube.Discovery.TopicPartitions:input_type -> danube.TopicLookupRequest
-	20, // 17: danube.HealthCheck.HealthCheck:input_type -> danube.HealthCheckRequest
-	22, // 18: danube.AuthService.Authenticate:input_type -> danube.AuthRequest
-	8,  // 19: danube.ProducerService.CreateProducer:output_type -> danube.ProducerResponse
-	9,  // 20: danube.ProducerService.SendMessage:output_type -> danube.MessageResponse
-	11, // 21: danube.ConsumerService.Subscribe:output_type -> danube.ConsumerResponse
-	13, // 22: danube.ConsumerService.ReceiveMessages:output_type -> danube.StreamMessage
-	16, // 23: danube.ConsumerService.Ack:output_type -> danube.AckResponse
-	18, // 24: danube.Discovery.TopicLookup:output_type -> danube.TopicLookupResponse
-	19, // 25: danube.Discovery.TopicPartitions:output_type -> danube.TopicPartitionsResponse
-	21, // 26: danube.HealthCheck.HealthCheck:output_type -> danube.HealthCheckResponse
-	23, // 27: danube.AuthService.Authenticate:output_type -> danube.AuthResponse
-	19, // [19:28] is the sub-list for method output_type
-	10, // [10:19] is the sub-list for method input_type
-	10, // [10:10] is the sub-list for extension type_name
-	10, // [10:10] is the sub-list for extension extendee
-	0,  // [0:10] is the sub-list for field type_name
+	14, // 7: danube.NackRequest.msg_id:type_name -> danube.MsgID
+	3,  // 8: danube.TopicLookupResponse.response_type:type_name -> danube.TopicLookupResponse.LookupType
+	4,  // 9: danube.HealthCheckRequest.client:type_name -> danube.HealthCheckRequest.ClientType
+	5,  // 10: danube.HealthCheckResponse.status:type_name -> danube.HealthCheckResponse.ClientStatus
+	6,  // 11: danube.ProducerService.CreateProducer:input_type -> danube.ProducerRequest
+	13, // 12: danube.ProducerService.SendMessage:input_type -> danube.StreamMessage
+	10, // 13: danube.ConsumerService.Subscribe:input_type -> danube.ConsumerRequest
+	12, // 14: danube.ConsumerService.ReceiveMessages:input_type -> danube.ReceiveRequest
+	15, // 15: danube.ConsumerService.Ack:input_type -> danube.AckRequest
+	17, // 16: danube.ConsumerService.Nack:input_type -> danube.NackRequest
+	19, // 17: danube.Discovery.TopicLookup:input_type -> danube.TopicLookupRequest
+	19, // 18: danube.Discovery.TopicPartitions:input_type -> danube.TopicLookupRequest
+	22, // 19: danube.HealthCheck.HealthCheck:input_type -> danube.HealthCheckRequest
+	24, // 20: danube.AuthService.Authenticate:input_type -> danube.AuthRequest
+	8,  // 21: danube.ProducerService.CreateProducer:output_type -> danube.ProducerResponse
+	9,  // 22: danube.ProducerService.SendMessage:output_type -> danube.MessageResponse
+	11, // 23: danube.ConsumerService.Subscribe:output_type -> danube.ConsumerResponse
+	13, // 24: danube.ConsumerService.ReceiveMessages:output_type -> danube.StreamMessage
+	16, // 25: danube.ConsumerService.Ack:output_type -> danube.AckResponse
+	18, // 26: danube.ConsumerService.Nack:output_type -> danube.NackResponse
+	20, // 27: danube.Discovery.TopicLookup:output_type -> danube.TopicLookupResponse
+	21, // 28: danube.Discovery.TopicPartitions:output_type -> danube.TopicPartitionsResponse
+	23, // 29: danube.HealthCheck.HealthCheck:output_type -> danube.HealthCheckResponse
+	25, // 30: danube.AuthService.Authenticate:output_type -> danube.AuthResponse
+	21, // [21:31] is the sub-list for method output_type
+	11, // [11:21] is the sub-list for method input_type
+	11, // [11:11] is the sub-list for extension type_name
+	11, // [11:11] is the sub-list for extension extendee
+	0,  // [0:11] is the sub-list for field type_name
 }
 
 func init() { file_DanubeApi_proto_init() }
@@ -1704,13 +1844,14 @@ func file_DanubeApi_proto_init() {
 		(*SchemaReference_MinVersion)(nil),
 	}
 	file_DanubeApi_proto_msgTypes[7].OneofWrappers = []any{}
+	file_DanubeApi_proto_msgTypes[11].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_DanubeApi_proto_rawDesc), len(file_DanubeApi_proto_rawDesc)),
 			NumEnums:      6,
-			NumMessages:   19,
+			NumMessages:   21,
 			NumExtensions: 0,
 			NumServices:   5,
 		},

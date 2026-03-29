@@ -171,6 +171,13 @@ func (c *Consumer) Ack(ctx context.Context, message *proto.StreamMessage) (*prot
 	return topic_consumer.sendAck(ctx, message.GetRequestId(), message.GetMsgId(), c.subscription)
 }
 
+// Nack sends a negative acknowledgement for a received message.
+func (c *Consumer) Nack(ctx context.Context, message *proto.StreamMessage, delayMs *uint64, reason *string) (*proto.NackResponse, error) {
+	topic_name := message.GetMsgId().GetTopicName()
+	topic_consumer := c.consumers[topic_name]
+	return topic_consumer.sendNack(ctx, message.GetRequestId(), message.GetMsgId(), c.subscription, delayMs, reason)
+}
+
 // Close stops receive loops and signals topic consumers to stop.
 func (c *Consumer) Close() {
 	c.shutdown.Store(true)
