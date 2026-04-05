@@ -120,7 +120,7 @@ func (p *topicProducer) tryCreate(ctx context.Context) (uint64, error) {
 		DispatchStrategy:   p.dispatch_strategy.toProtoDispatchStrategy(),
 	}
 
-	ctxWithAuth, err := p.client.authService.attachTokenIfNeeded(ctx, p.client.connectionManager.connectionOptions.APIKey, p.connectURL)
+	ctxWithAuth, err := p.client.authService.attachTokenIfNeeded(ctx, p.connectURL)
 	if err != nil {
 		return 0, err
 	}
@@ -203,7 +203,7 @@ func (p *topicProducer) send(ctx context.Context, data []byte, attributes map[st
 		SchemaVersion:    p.schemaVersion,
 	}
 
-	ctxWithAuth, err := p.client.authService.attachTokenIfNeeded(ctx, p.client.connectionManager.connectionOptions.APIKey, p.connectURL)
+	ctxWithAuth, err := p.client.authService.attachTokenIfNeeded(ctx, p.connectURL)
 	if err != nil {
 		return 0, err
 	}

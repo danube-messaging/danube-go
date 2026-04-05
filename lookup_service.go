@@ -43,7 +43,7 @@ func (ls *lookupService) lookupTopic(ctx context.Context, addr string, topic str
 		Topic:     topic,
 	}
 
-	ctxWithAuth, err := ls.authService.attachTokenIfNeeded(ctx, ls.cnxManager.connectionOptions.APIKey, addr)
+	ctxWithAuth, err := ls.authService.attachTokenIfNeeded(ctx, addr)
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +75,7 @@ func (ls *lookupService) topicPartitions(ctx context.Context, addr string, topic
 		Topic:     topic,
 	}
 
-	ctxWithAuth, err := ls.authService.attachTokenIfNeeded(ctx, ls.cnxManager.connectionOptions.APIKey, addr)
+	ctxWithAuth, err := ls.authService.attachTokenIfNeeded(ctx, addr)
 	if err != nil {
 		return nil, err
 	}

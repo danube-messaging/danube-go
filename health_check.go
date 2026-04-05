@@ -36,7 +36,6 @@ func (hcs *healthCheckService) StartHealthCheck(
 		return err
 	}
 
-	apiKey := hcs.cnxManager.connectionOptions.APIKey
 	connectURLCopy := connectURL
 	brokerAddrCopy := brokerAddr
 	proxyCopy := proxy
@@ -44,7 +43,7 @@ func (hcs *healthCheckService) StartHealthCheck(
 	client := proto.NewHealthCheckClient(conn.grpcConn)
 	go func() {
 		for {
-			err := healthCheck(ctx, client, hcs.requestID.Add(1), clientType, clientID, stopSignal, apiKey, connectURLCopy, brokerAddrCopy, proxyCopy, hcs.authService)
+			err := healthCheck(ctx, client, hcs.requestID.Add(1), clientType, clientID, stopSignal, connectURLCopy, brokerAddrCopy, proxyCopy, hcs.authService)
 			if err != nil {
 				return
 			}
@@ -61,7 +60,6 @@ func healthCheck(
 	clientType int32,
 	clientID uint64,
 	stopSignal *atomic.Bool,
-	apiKey string,
 	connectURL string,
 	brokerAddr string,
 	proxy bool,
@@ -73,7 +71,7 @@ func healthCheck(
 		Id:        clientID,
 	}
 
-	ctxWithAuth, err := authService.attachTokenIfNeeded(ctx, apiKey, connectURL)
+	ctxWithAuth, err := authService.attachTokenIfNeeded(ctx, connectURL)
 	if err != nil {
 		return err
 	}

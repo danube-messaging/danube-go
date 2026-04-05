@@ -16,12 +16,29 @@ type connectionStatus struct {
 	Disconnected bool
 }
 
+// TokenSupplier is a function that returns a token string, called on every request.
+// This enables dynamic token refresh (e.g., reading from a file that is
+// periodically updated by infrastructure like K8s projected volumes).
+type TokenSupplier func() string
+
 // ConnectionOptions configures how the client connects to the broker.
 type ConnectionOptions struct {
-	DialOptions []DialOption // Optional gRPC dial options.
-	TLSConfig   *tls.Config  // TLS configuration (required when UseTLS is true).
-	UseTLS      bool         // Enable TLS/mTLS for the connection.
-	APIKey      string       // API key for auth (enables TLS with system roots).
+	DialOptions    []DialOption // Optional gRPC dial options.
+	TLSConfig      *tls.Config  // TLS configuration (required when UseTLS is true).
+	UseTLS         bool         // Enable TLS/mTLS for the connection.
+	Token          string       // Static JWT token for authentication.
+	TokenSupplier  TokenSupplier // Dynamic token supplier called per-request.
+	InternalBroker string       // Broker-internal identity header (broker-to-broker only).
+}
+
+// resolveToken returns the current token. If a supplier is set, it calls
+// the supplier to get a fresh token (enabling runtime rotation). Otherwise
+// falls back to the static token.
+func (opts *ConnectionOptions) resolveToken() string {
+	if opts.TokenSupplier != nil {
+		return opts.TokenSupplier()
+	}
+	return opts.Token
 }
 
 type connectionManager struct {

@@ -2,70 +2,37 @@ package danube
 
 import (
 	"context"
-	"sync"
-	"time"
 
-	"github.com/danube-messaging/danube-go/proto"
 	"google.golang.org/grpc/metadata"
 )
 
-const tokenExpirySecs = 3600
+const internalBrokerHeader = "x-danube-internal-broker"
 
+// authService handles JWT token insertion into gRPC request metadata.
+//
+// With JWT-first authentication, the client uses a pre-generated JWT token
+// (from `danube-admin security tokens create`) that is sent as
+// `Authorization: Bearer <token>` on every gRPC request.
 type authService struct {
 	cnxManager *connectionManager
-	mu         sync.Mutex
-	token      string
-	expiry     time.Time
 }
 
 func newAuthService(cnxManager *connectionManager) *authService {
 	return &authService{cnxManager: cnxManager}
 }
 
-func (as *authService) authenticateClient(ctx context.Context, addr string, apiKey string) (string, error) {
-	conn, err := as.cnxManager.getConnection(addr, addr)
-	if err != nil {
-		return "", err
+// attachTokenIfNeeded returns a context with the authorization Bearer header
+// if a token is configured (static or via supplier). It also attaches the
+// internal broker header when set.
+func (as *authService) attachTokenIfNeeded(ctx context.Context, addr string) (context.Context, error) {
+	token := as.cnxManager.connectionOptions.resolveToken()
+	if token != "" {
+		ctx = metadata.AppendToOutgoingContext(ctx, "authorization", "Bearer "+token)
 	}
 
-	client := proto.NewAuthServiceClient(conn.grpcConn)
-	resp, err := client.Authenticate(ctx, &proto.AuthRequest{ApiKey: apiKey})
-	if err != nil {
-		return "", err
+	if as.cnxManager.connectionOptions.InternalBroker != "" {
+		ctx = metadata.AppendToOutgoingContext(ctx, internalBrokerHeader, as.cnxManager.connectionOptions.InternalBroker)
 	}
 
-	token := resp.GetToken()
-	as.mu.Lock()
-	as.token = token
-	as.expiry = time.Now().Add(time.Duration(tokenExpirySecs) * time.Second)
-	as.mu.Unlock()
-
-	return token, nil
-}
-
-func (as *authService) getValidToken(ctx context.Context, addr string, apiKey string) (string, error) {
-	as.mu.Lock()
-	token := as.token
-	expiry := as.expiry
-	as.mu.Unlock()
-
-	if token != "" && time.Now().Before(expiry) {
-		return token, nil
-	}
-
-	return as.authenticateClient(ctx, addr, apiKey)
-}
-
-// attachTokenIfNeeded returns a context with the authorization header if apiKey is set.
-func (as *authService) attachTokenIfNeeded(ctx context.Context, apiKey string, addr string) (context.Context, error) {
-	if apiKey == "" {
-		return ctx, nil
-	}
-
-	token, err := as.getValidToken(ctx, addr, apiKey)
-	if err != nil {
-		return ctx, err
-	}
-
-	return metadata.AppendToOutgoingContext(ctx, "authorization", "Bearer "+token), nil
+	return ctx, nil
 }

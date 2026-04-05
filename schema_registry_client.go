@@ -27,7 +27,7 @@ func (c *SchemaRegistryClient) prepare(ctx context.Context, addr string) (contex
 	if err != nil {
 		return ctx, nil, err
 	}
-	ctxWithAuth, err := c.authService.attachTokenIfNeeded(ctx, c.cnxManager.connectionOptions.APIKey, addr)
+	ctxWithAuth, err := c.authService.attachTokenIfNeeded(ctx, addr)
 	if err != nil {
 		return ctx, nil, err
 	}

@@ -1493,94 +1493,6 @@ func (x *HealthCheckResponse) GetStatus() HealthCheckResponse_ClientStatus {
 	return HealthCheckResponse_OK
 }
 
-type AuthRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ApiKey        string                 `protobuf:"bytes,1,opt,name=api_key,json=apiKey,proto3" json:"api_key,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *AuthRequest) Reset() {
-	*x = AuthRequest{}
-	mi := &file_DanubeApi_proto_msgTypes[18]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *AuthRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*AuthRequest) ProtoMessage() {}
-
-func (x *AuthRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_DanubeApi_proto_msgTypes[18]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use AuthRequest.ProtoReflect.Descriptor instead.
-func (*AuthRequest) Descriptor() ([]byte, []int) {
-	return file_DanubeApi_proto_rawDescGZIP(), []int{18}
-}
-
-func (x *AuthRequest) GetApiKey() string {
-	if x != nil {
-		return x.ApiKey
-	}
-	return ""
-}
-
-type AuthResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Token         string                 `protobuf:"bytes,1,opt,name=token,proto3" json:"token,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *AuthResponse) Reset() {
-	*x = AuthResponse{}
-	mi := &file_DanubeApi_proto_msgTypes[19]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *AuthResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*AuthResponse) ProtoMessage() {}
-
-func (x *AuthResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_DanubeApi_proto_msgTypes[19]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use AuthResponse.ProtoReflect.Descriptor instead.
-func (*AuthResponse) Descriptor() ([]byte, []int) {
-	return file_DanubeApi_proto_rawDescGZIP(), []int{19}
-}
-
-func (x *AuthResponse) GetToken() string {
-	if x != nil {
-		return x.Token
-	}
-	return ""
-}
-
 var File_DanubeApi_proto protoreflect.FileDescriptor
 
 const file_DanubeApi_proto_rawDesc = "" +
@@ -1723,11 +1635,7 @@ const file_DanubeApi_proto_rawDesc = "" +
 	"\x06status\x18\x01 \x01(\x0e2(.danube.HealthCheckResponse.ClientStatusR\x06status\"!\n" +
 	"\fClientStatus\x12\x06\n" +
 	"\x02OK\x10\x00\x12\t\n" +
-	"\x05CLOSE\x10\x01\"&\n" +
-	"\vAuthRequest\x12\x17\n" +
-	"\aapi_key\x18\x01 \x01(\tR\x06apiKey\"$\n" +
-	"\fAuthResponse\x12\x14\n" +
-	"\x05token\x18\x01 \x01(\tR\x05token*/\n" +
+	"\x05CLOSE\x10\x01*/\n" +
 	"\x12ProducerAccessMode\x12\n" +
 	"\n" +
 	"\x06Shared\x10\x00\x12\r\n" +
@@ -1747,9 +1655,7 @@ const file_DanubeApi_proto_rawDesc = "" +
 	"\vTopicLookup\x12\x1a.danube.TopicLookupRequest\x1a\x1b.danube.TopicLookupResponse\x12N\n" +
 	"\x0fTopicPartitions\x12\x1a.danube.TopicLookupRequest\x1a\x1f.danube.TopicPartitionsResponse2U\n" +
 	"\vHealthCheck\x12F\n" +
-	"\vHealthCheck\x12\x1a.danube.HealthCheckRequest\x1a\x1b.danube.HealthCheckResponse2H\n" +
-	"\vAuthService\x129\n" +
-	"\fAuthenticate\x12\x13.danube.AuthRequest\x1a\x14.danube.AuthResponseB-Z+github.com/danube-messaging/danube-go/protob\x06proto3"
+	"\vHealthCheck\x12\x1a.danube.HealthCheckRequest\x1a\x1b.danube.HealthCheckResponseB-Z+github.com/danube-messaging/danube-go/protob\x06proto3"
 
 var (
 	file_DanubeApi_proto_rawDescOnce sync.Once
@@ -1764,7 +1670,7 @@ func file_DanubeApi_proto_rawDescGZIP() []byte {
 }
 
 var file_DanubeApi_proto_enumTypes = make([]protoimpl.EnumInfo, 6)
-var file_DanubeApi_proto_msgTypes = make([]protoimpl.MessageInfo, 21)
+var file_DanubeApi_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
 var file_DanubeApi_proto_goTypes = []any{
 	(ProducerAccessMode)(0),               // 0: danube.ProducerAccessMode
 	(DispatchStrategy)(0),                 // 1: danube.DispatchStrategy
@@ -1790,9 +1696,7 @@ var file_DanubeApi_proto_goTypes = []any{
 	(*TopicPartitionsResponse)(nil),       // 21: danube.TopicPartitionsResponse
 	(*HealthCheckRequest)(nil),            // 22: danube.HealthCheckRequest
 	(*HealthCheckResponse)(nil),           // 23: danube.HealthCheckResponse
-	(*AuthRequest)(nil),                   // 24: danube.AuthRequest
-	(*AuthResponse)(nil),                  // 25: danube.AuthResponse
-	nil,                                   // 26: danube.StreamMessage.AttributesEntry
+	nil,                                   // 24: danube.StreamMessage.AttributesEntry
 }
 var file_DanubeApi_proto_depIdxs = []int32{
 	7,  // 0: danube.ProducerRequest.schema_ref:type_name -> danube.SchemaReference
@@ -1800,7 +1704,7 @@ var file_DanubeApi_proto_depIdxs = []int32{
 	1,  // 2: danube.ProducerRequest.dispatch_strategy:type_name -> danube.DispatchStrategy
 	2,  // 3: danube.ConsumerRequest.subscription_type:type_name -> danube.ConsumerRequest.SubscriptionType
 	14, // 4: danube.StreamMessage.msg_id:type_name -> danube.MsgID
-	26, // 5: danube.StreamMessage.attributes:type_name -> danube.StreamMessage.AttributesEntry
+	24, // 5: danube.StreamMessage.attributes:type_name -> danube.StreamMessage.AttributesEntry
 	14, // 6: danube.AckRequest.msg_id:type_name -> danube.MsgID
 	14, // 7: danube.NackRequest.msg_id:type_name -> danube.MsgID
 	3,  // 8: danube.TopicLookupResponse.response_type:type_name -> danube.TopicLookupResponse.LookupType
@@ -1815,19 +1719,17 @@ var file_DanubeApi_proto_depIdxs = []int32{
 	19, // 17: danube.Discovery.TopicLookup:input_type -> danube.TopicLookupRequest
 	19, // 18: danube.Discovery.TopicPartitions:input_type -> danube.TopicLookupRequest
 	22, // 19: danube.HealthCheck.HealthCheck:input_type -> danube.HealthCheckRequest
-	24, // 20: danube.AuthService.Authenticate:input_type -> danube.AuthRequest
-	8,  // 21: danube.ProducerService.CreateProducer:output_type -> danube.ProducerResponse
-	9,  // 22: danube.ProducerService.SendMessage:output_type -> danube.MessageResponse
-	11, // 23: danube.ConsumerService.Subscribe:output_type -> danube.ConsumerResponse
-	13, // 24: danube.ConsumerService.ReceiveMessages:output_type -> danube.StreamMessage
-	16, // 25: danube.ConsumerService.Ack:output_type -> danube.AckResponse
-	18, // 26: danube.ConsumerService.Nack:output_type -> danube.NackResponse
-	20, // 27: danube.Discovery.TopicLookup:output_type -> danube.TopicLookupResponse
-	21, // 28: danube.Discovery.TopicPartitions:output_type -> danube.TopicPartitionsResponse
-	23, // 29: danube.HealthCheck.HealthCheck:output_type -> danube.HealthCheckResponse
-	25, // 30: danube.AuthService.Authenticate:output_type -> danube.AuthResponse
-	21, // [21:31] is the sub-list for method output_type
-	11, // [11:21] is the sub-list for method input_type
+	8,  // 20: danube.ProducerService.CreateProducer:output_type -> danube.ProducerResponse
+	9,  // 21: danube.ProducerService.SendMessage:output_type -> danube.MessageResponse
+	11, // 22: danube.ConsumerService.Subscribe:output_type -> danube.ConsumerResponse
+	13, // 23: danube.ConsumerService.ReceiveMessages:output_type -> danube.StreamMessage
+	16, // 24: danube.ConsumerService.Ack:output_type -> danube.AckResponse
+	18, // 25: danube.ConsumerService.Nack:output_type -> danube.NackResponse
+	20, // 26: danube.Discovery.TopicLookup:output_type -> danube.TopicLookupResponse
+	21, // 27: danube.Discovery.TopicPartitions:output_type -> danube.TopicPartitionsResponse
+	23, // 28: danube.HealthCheck.HealthCheck:output_type -> danube.HealthCheckResponse
+	20, // [20:29] is the sub-list for method output_type
+	11, // [11:20] is the sub-list for method input_type
 	11, // [11:11] is the sub-list for extension type_name
 	11, // [11:11] is the sub-list for extension extendee
 	0,  // [0:11] is the sub-list for field type_name
@@ -1851,9 +1753,9 @@ func file_DanubeApi_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_DanubeApi_proto_rawDesc), len(file_DanubeApi_proto_rawDesc)),
 			NumEnums:      6,
-			NumMessages:   21,
+			NumMessages:   19,
 			NumExtensions: 0,
-			NumServices:   5,
+			NumServices:   4,
 		},
 		GoTypes:           file_DanubeApi_proto_goTypes,
 		DependencyIndexes: file_DanubeApi_proto_depIdxs,

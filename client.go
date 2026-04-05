@@ -1,7 +1,6 @@
 package danube
 
 import (
-	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
@@ -30,12 +29,6 @@ func NewClient() *DanubeClientBuilder {
 func newDanubeClient(builder DanubeClientBuilder) (*DanubeClient, error) {
 	connectionManager := newConnectionManager(builder.connectionOptions)
 	authService := newAuthService(connectionManager)
-
-	if builder.connectionOptions.APIKey != "" {
-		if _, err := authService.authenticateClient(context.Background(), builder.URI, builder.connectionOptions.APIKey); err != nil {
-			return nil, err
-		}
-	}
 
 	lookupService := newLookupService(connectionManager, authService)
 	healthCheckService := newHealthCheckService(connectionManager, authService)
@@ -147,13 +140,41 @@ func (b *DanubeClientBuilder) WithMTLS(caCertPath, clientCertPath, clientKeyPath
 	return b, nil
 }
 
-// WithAPIKey configures API key authentication and enables TLS with system roots.
-func (b *DanubeClientBuilder) WithAPIKey(apiKey string) *DanubeClientBuilder {
-	b.connectionOptions.APIKey = apiKey
-	b.connectionOptions.UseTLS = true
+// WithToken sets the authentication token (JWT) for the client.
+//
+// Use `danube-admin security tokens create` to generate a token.
+// Automatically enables TLS. If no TLS config has been set via WithTLS() or
+// WithMTLS(), a default TLS config using system root certificates is applied.
+//
+// For tokens that expire, consider WithTokenSupplier instead, which allows
+// runtime token refresh.
+func (b *DanubeClientBuilder) WithToken(token string) *DanubeClientBuilder {
+	b.connectionOptions.Token = token
 	if b.connectionOptions.TLSConfig == nil {
 		b.connectionOptions.TLSConfig = &tls.Config{}
 	}
+	b.connectionOptions.UseTLS = true
+	return b
+}
+
+// WithTokenSupplier sets a dynamic token supplier for the client.
+//
+// The supplier function is called on every gRPC request to obtain the current
+// token, enabling runtime token refresh without restarting the client. This is
+// useful for:
+//
+//   - File-based tokens: Read from a file updated by infrastructure
+//     (e.g., K8s projected volumes, sidecar token refreshers)
+//   - Environment-based tokens: Read from an environment variable
+//   - Custom refresh logic: Implement your own token rotation
+//
+// Automatically enables TLS (same as WithToken).
+func (b *DanubeClientBuilder) WithTokenSupplier(supplier func() string) *DanubeClientBuilder {
+	b.connectionOptions.TokenSupplier = supplier
+	if b.connectionOptions.TLSConfig == nil {
+		b.connectionOptions.TLSConfig = &tls.Config{}
+	}
+	b.connectionOptions.UseTLS = true
 	return b
 }
 
@@ -161,6 +182,7 @@ func (b *DanubeClientBuilder) WithAPIKey(apiKey string) *DanubeClientBuilder {
 //
 // Returns:
 // - *DanubeClient: A new instance of DanubeClient configured with the specified options.
+// - error: An error if the configuration is invalid or incomplete.
 func (b *DanubeClientBuilder) Build() (*DanubeClient, error) {
 	return newDanubeClient(*b)
 }
