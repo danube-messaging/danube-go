@@ -116,7 +116,7 @@ func (c *topicConsumer) trySubscribe(ctx context.Context) (uint64, error) {
 		SubscriptionType: proto.ConsumerRequest_SubscriptionType(c.subscriptionType),
 	}
 
-	ctxWithAuth, err := c.client.authService.attachTokenIfNeeded(ctx, c.client.connectionManager.connectionOptions.APIKey, c.connectURL)
+	ctxWithAuth, err := c.client.authService.attachTokenIfNeeded(ctx, c.connectURL)
 	if err != nil {
 		return 0, err
 	}
@@ -166,7 +166,7 @@ func (c *topicConsumer) receive(ctx context.Context) (proto.ConsumerService_Rece
 		ConsumerId: c.consumerID,
 	}
 
-	ctxWithAuth, err := c.client.authService.attachTokenIfNeeded(ctx, c.client.connectionManager.connectionOptions.APIKey, c.connectURL)
+	ctxWithAuth, err := c.client.authService.attachTokenIfNeeded(ctx, c.connectURL)
 	if err != nil {
 		return nil, err
 	}
@@ -187,7 +187,7 @@ func (c *topicConsumer) sendAck(ctx context.Context, req_id uint64, msg_id *prot
 		SubscriptionName: subscription_name,
 	}
 
-	ctxWithAuth, err := c.client.authService.attachTokenIfNeeded(ctx, c.client.connectionManager.connectionOptions.APIKey, c.connectURL)
+	ctxWithAuth, err := c.client.authService.attachTokenIfNeeded(ctx, c.connectURL)
 	if err != nil {
 		return nil, err
 	}
@@ -210,7 +210,7 @@ func (c *topicConsumer) sendNack(ctx context.Context, req_id uint64, msg_id *pro
 		Reason:           reason,
 	}
 
-	ctxWithAuth, err := c.client.authService.attachTokenIfNeeded(ctx, c.client.connectionManager.connectionOptions.APIKey, c.connectURL)
+	ctxWithAuth, err := c.client.authService.attachTokenIfNeeded(ctx, c.connectURL)
 	if err != nil {
 		return nil, err
 	}
