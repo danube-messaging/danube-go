@@ -3,6 +3,7 @@ package integration_tests
 import (
 	"context"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -83,40 +84,58 @@ func TestKeySharedBasic(t *testing.T) {
 		}
 	}
 
-	// Collect all messages from both consumers
-	allMessages := collectMessages(t, msgChan1, msgChan2, messageCount, 15*time.Second)
+	// Collect messages from both consumers, acking inline.
+	// Key-Shared dispatch has per-key in-flight limits — the broker
+	// won't send the next message for the same key until the current one
+	// is acked. We must ack as we go to avoid deadlocking.
+	type entry struct {
+		msg      *proto.StreamMessage
+		consumer int
+	}
+	var entries []entry
+	deadline := time.After(15 * time.Second)
 
-	// Ack all messages
-	for _, entry := range allMessages {
-		var ackErr error
-		if entry.consumer == 1 {
-			_, ackErr = consumer1.Ack(ctx, entry.msg)
-		} else {
-			_, ackErr = consumer2.Ack(ctx, entry.msg)
-		}
-		if ackErr != nil {
-			t.Fatalf("failed to ack message: %v", ackErr)
+	for len(entries) < messageCount {
+		select {
+		case msg, ok := <-msgChan1:
+			if !ok {
+				t.Fatalf("channel 1 closed after %d messages", len(entries))
+			}
+			if _, err := consumer1.Ack(ctx, msg); err != nil {
+				t.Fatalf("failed to ack on consumer1: %v", err)
+			}
+			entries = append(entries, entry{msg: msg, consumer: 1})
+		case msg, ok := <-msgChan2:
+			if !ok {
+				t.Fatalf("channel 2 closed after %d messages", len(entries))
+			}
+			if _, err := consumer2.Ack(ctx, msg); err != nil {
+				t.Fatalf("failed to ack on consumer2: %v", err)
+			}
+			entries = append(entries, entry{msg: msg, consumer: 2})
+		case <-deadline:
+			t.Fatalf("timeout: collected only %d/%d messages", len(entries), messageCount)
 		}
 	}
 
 	// Verify: all messages with the same key went to the same consumer
 	keyToConsumer := make(map[string]int)
-	for _, entry := range allMessages {
-		key := entry.msg.GetRoutingKey()
+	for _, e := range entries {
+		key := e.msg.GetRoutingKey()
 		if prev, ok := keyToConsumer[key]; ok {
-			if prev != entry.consumer {
-				t.Fatalf("key %q was routed to consumer %d and %d — expected same consumer", key, prev, entry.consumer)
+			if prev != e.consumer {
+				t.Fatalf("key %q was routed to consumer %d and %d — expected same consumer", key, prev, e.consumer)
 			}
 		} else {
-			keyToConsumer[key] = entry.consumer
+			keyToConsumer[key] = e.consumer
 		}
 	}
 
-	if len(allMessages) != messageCount {
-		t.Fatalf("expected %d messages, got %d", messageCount, len(allMessages))
+	if len(entries) != messageCount {
+		t.Fatalf("expected %d messages, got %d", messageCount, len(entries))
 	}
 
-	t.Logf("Key-Shared basic test passed: %d messages, key distribution: %v", len(allMessages), keyToConsumer)
+	t.Logf("Key-Shared basic test passed: %d messages, key distribution: %v", len(entries), keyToConsumer)
 }
 
 // TestKeySharedFiltering verifies that key filters restrict which messages
@@ -190,79 +209,55 @@ func TestKeySharedFiltering(t *testing.T) {
 		}
 	}
 
-	// Collect all messages
-	allMessages := collectMessages(t, filteredChan, catchAllChan, len(keys), 15*time.Second)
+	// Collect all messages, acking inline to unblock per-key dispatch
+	var mu sync.Mutex
+	var filteredKeys []string
+	var allCount int
+	deadline := time.After(15 * time.Second)
 
-	// Ack all
-	for _, entry := range allMessages {
-		var ackErr error
-		if entry.consumer == 1 {
-			_, ackErr = filteredConsumer.Ack(ctx, entry.msg)
-		} else {
-			_, ackErr = catchAllConsumer.Ack(ctx, entry.msg)
-		}
-		if ackErr != nil {
-			t.Fatalf("failed to ack: %v", ackErr)
+	for allCount < len(keys) {
+		select {
+		case msg, ok := <-filteredChan:
+			if !ok {
+				t.Fatalf("filtered channel closed after %d messages", allCount)
+			}
+			if _, err := filteredConsumer.Ack(ctx, msg); err != nil {
+				t.Fatalf("failed to ack on filtered consumer: %v", err)
+			}
+			mu.Lock()
+			filteredKeys = append(filteredKeys, msg.GetRoutingKey())
+			allCount++
+			mu.Unlock()
+		case msg, ok := <-catchAllChan:
+			if !ok {
+				t.Fatalf("catch-all channel closed after %d messages", allCount)
+			}
+			if _, err := catchAllConsumer.Ack(ctx, msg); err != nil {
+				t.Fatalf("failed to ack on catch-all consumer: %v", err)
+			}
+			key := msg.GetRoutingKey()
+			if key == "payment" {
+				t.Fatalf("catch-all consumer received 'payment' key — should have gone to filtered consumer")
+			}
+			mu.Lock()
+			allCount++
+			mu.Unlock()
+		case <-deadline:
+			t.Fatalf("timeout: collected only %d/%d messages", allCount, len(keys))
 		}
 	}
 
 	// Verify: filtered consumer should only have "payment" messages
-	paymentCount := 0
-	for _, entry := range allMessages {
-		key := entry.msg.GetRoutingKey()
-		if entry.consumer == 1 {
-			if key != "payment" {
-				t.Fatalf("filtered consumer received key %q, expected only 'payment'", key)
-			}
-			paymentCount++
+	for _, k := range filteredKeys {
+		if k != "payment" {
+			t.Fatalf("filtered consumer received key %q, expected only 'payment'", k)
 		}
 	}
 
 	// We sent 3 "payment" messages
-	if paymentCount != 3 {
-		t.Fatalf("expected 3 payment messages on filtered consumer, got %d", paymentCount)
+	if len(filteredKeys) != 3 {
+		t.Fatalf("expected 3 payment messages on filtered consumer, got %d", len(filteredKeys))
 	}
 
-	if len(allMessages) != len(keys) {
-		t.Fatalf("expected %d total messages, got %d", len(keys), len(allMessages))
-	}
-
-	t.Logf("Key-Shared filtering test passed: filtered consumer got %d/3 payment messages", paymentCount)
-}
-
-type messageEntry struct {
-	msg      *proto.StreamMessage
-	consumer int // 1 or 2
-}
-
-// collectMessages reads from two consumer channels until totalExpected messages
-// are collected or timeout is reached.
-func collectMessages(
-	t *testing.T,
-	ch1 <-chan *proto.StreamMessage,
-	ch2 <-chan *proto.StreamMessage,
-	totalExpected int,
-	timeout time.Duration,
-) []messageEntry {
-	t.Helper()
-	var entries []messageEntry
-	deadline := time.After(timeout)
-
-	for len(entries) < totalExpected {
-		select {
-		case msg, ok := <-ch1:
-			if !ok {
-				t.Fatalf("channel 1 closed after %d messages", len(entries))
-			}
-			entries = append(entries, messageEntry{msg: msg, consumer: 1})
-		case msg, ok := <-ch2:
-			if !ok {
-				t.Fatalf("channel 2 closed after %d messages", len(entries))
-			}
-			entries = append(entries, messageEntry{msg: msg, consumer: 2})
-		case <-deadline:
-			t.Fatalf("timeout: collected only %d/%d messages", len(entries), totalExpected)
-		}
-	}
-	return entries
+	t.Logf("Key-Shared filtering test passed: filtered consumer got %d/3 payment messages", len(filteredKeys))
 }
