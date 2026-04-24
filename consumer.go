@@ -20,6 +20,8 @@ const (
 	Shared
 	// FailOver - similar to exclusive subscriptions, but multiple consumers can subscribe, and one actively receives messages
 	FailOver
+	// KeyShared - messages with the same routing key always go to the same consumer, in order
+	KeyShared
 )
 
 // Consumer represents a message consumer that subscribes to a topic and receives messages.
@@ -31,8 +33,9 @@ type Consumer struct {
 	consumerName     string                    // the name assigned to the consumer instance
 	consumers        map[string]*topicConsumer // the map between the partitioned topic name and the consumer instance
 	subscription     string                    // the name of the subscription for the consumer
-	subscriptionType SubType                   // the type of subscription (e.g., EXCLUSIVE, SHARED, FAILOVER)
+	subscriptionType SubType                   // the type of subscription (e.g., EXCLUSIVE, SHARED, FAILOVER, KEY_SHARED)
 	consumerOptions  ConsumerOptions           // configuration options for the consumer
+	keyFilters       []string                  // key filter patterns for KeyShared subscriptions
 	shutdown         *atomic.Bool
 	receiveCancel    context.CancelFunc
 	receiveWg        sync.WaitGroup
@@ -43,6 +46,7 @@ func newConsumer(
 	topicName, consumerName, subscription string,
 	subType *SubType,
 	options ConsumerOptions,
+	keyFilters []string,
 ) *Consumer {
 	var subscriptionType SubType
 	if subType != nil {
@@ -58,6 +62,7 @@ func newConsumer(
 		subscription:     subscription,
 		subscriptionType: subscriptionType,
 		consumerOptions:  options,
+		keyFilters:       keyFilters,
 		shutdown:         &atomic.Bool{},
 	}
 }
@@ -99,6 +104,7 @@ func (c *Consumer) Subscribe(ctx context.Context) error {
 				c.consumerName,
 				c.subscription,
 				&c.subscriptionType,
+				c.keyFilters,
 				c.consumerOptions,
 			)
 

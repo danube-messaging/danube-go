@@ -12,6 +12,7 @@ type ConsumerBuilder struct {
 	subscription     string
 	subscriptionType *SubType
 	consumerOptions  ConsumerOptions
+	keyFilters       []string
 }
 
 func newConsumerBuilder(client *DanubeClient) *ConsumerBuilder {
@@ -60,6 +61,19 @@ func (b *ConsumerBuilder) WithOptions(options ConsumerOptions) *ConsumerBuilder 
 	return b
 }
 
+// WithKeyFilter adds a key filter pattern for KeyShared subscriptions.
+// Uses glob syntax: "user-*", "eu-west-?", "*"
+func (b *ConsumerBuilder) WithKeyFilter(pattern string) *ConsumerBuilder {
+	b.keyFilters = append(b.keyFilters, pattern)
+	return b
+}
+
+// WithKeyFilters adds multiple key filter patterns for KeyShared subscriptions.
+func (b *ConsumerBuilder) WithKeyFilters(patterns []string) *ConsumerBuilder {
+	b.keyFilters = append(b.keyFilters, patterns...)
+	return b
+}
+
 // Build creates a new Consumer instance using the settings configured in the ConsumerBuilder.
 // It performs validation to ensure that all required fields are set before creating the consumer.
 //
@@ -70,7 +84,7 @@ func (b *ConsumerBuilder) Build() (*Consumer, error) {
 	if b.topic == "" || b.consumerName == "" || b.subscription == "" {
 		return nil, errors.New("missing required fields")
 	}
-	return newConsumer(b.client, b.topic, b.consumerName, b.subscription, b.subscriptionType, b.consumerOptions), nil
+	return newConsumer(b.client, b.topic, b.consumerName, b.subscription, b.subscriptionType, b.consumerOptions, b.keyFilters), nil
 }
 
 // ConsumerOptions configures retry behavior for consumers.

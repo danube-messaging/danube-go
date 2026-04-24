@@ -1,114 +1,131 @@
 # Danube-go client
 
-The Go Client library for interacting with Danube Messaging Broker platform.
+The Go client library for interacting with [Danube](https://github.com/danube-messaging/danube), an open-source distributed messaging platform written in Rust.
 
-[Danube](https://github.com/danube-messaging/danube) is an open-source **distributed** Messaging platform written in Rust. Consult [the documentation](https://danube-docs.dev-state.com/) for supported concepts and the platform architecture.
+Consult [the documentation](https://danube-docs.dev-state.com/) for supported concepts and platform architecture.
 
-## Example usage
+## Install
 
-Check out the [example files](https://github.com/danube-messaging/danube-go/tree/main/examples).
-
-### Start the Danube server
-
-Use the [instructions from the documentation](https://danube-docs.dev-state.com/) to run the Danube broker/cluster.
-
-### Create Producer
-
-```go
-client, err := danube.NewClient().ServiceURL("127.0.0.1:6650").Build()
-if err != nil {
-    log.Fatalf("Failed to create client: %v", err)
-}
-
-ctx := context.Background()
-topic := "/default/test_topic"
-producerName := "test_producer"
-
-producer, err := client.NewProducer().
-    WithName(producerName).
-    WithTopic(topic).
-    Build()
-if err != nil {
-    log.Fatalf("unable to initialize the producer: %v", err)
-}
-
-if err := producer.Create(ctx); err != nil {
-    log.Fatalf("Failed to create producer: %v", err)
-}
-log.Printf("The Producer %s was created", producerName)
-
-payload := fmt.Sprintln("Hello Danube")
-
-// Convert string to bytes
-bytes_payload := []byte(payload)
-
-// You can send the payload along with the user defined attributes, in this case is nil
-messageID, err := producer.Send(ctx, bytes_payload, nil)
-if err != nil {
-    log.Fatalf("Failed to send message: %v", err)
-}
-log.Printf("The Message with id %v was sent", messageID)
+```bash
+go get github.com/danube-messaging/danube-go
 ```
 
-### Reliable Dispatch (optional)
+## Producer
 
-Reliable dispatch can be enabled when creating the producer, the broker will stream the messages to the consumer from WAL and cloud storage.
+Producers publish messages to topics. A producer connects to a broker, creates a topic (or attaches to an existing one), and sends messages.
 
 ```go
-reliableStrategy := danube.NewReliableDispatchStrategy()
-
 producer, err := client.NewProducer().
-    WithName(producerName).
-    WithTopic(topic).
-    WithDispatchStrategy(reliableStrategy).
+    WithName("my-producer").
+    WithTopic("/default/my-topic").
+    Build()
+
+producer.Create(ctx)
+producer.Send(ctx, payload, attributes)
+```
+
+**Reliable dispatch** — messages are persisted to WAL and streamed to consumers with at-least-once delivery:
+
+```go
+producer, err := client.NewProducer().
+    WithName("my-producer").
+    WithTopic("/default/my-topic").
+    WithDispatchStrategy(danube.NewReliableDispatchStrategy()).
     Build()
 ```
 
-### Create Consumer
+**Key-Shared routing** — tag messages with a routing key so all messages with the same key go to the same consumer:
 
 ```go
-client, err := danube.NewClient().ServiceURL("127.0.0.1:6650").Build()
-if err != nil {
-    log.Fatalf("Failed to create client: %v", err)
-}
+producer.SendWithKey(ctx, payload, nil, "order-123")
+```
 
-ctx := context.Background()
-topic := "/default/test_topic"
-consumerName := "test_consumer"
-subscriptionName := "test_subscription"
-subType := danube.Exclusive
+**Partitioned topics** — distribute load across multiple brokers:
 
+```go
+producer, err := client.NewProducer().
+    WithTopic("/default/my-topic").
+    WithName("my-producer").
+    WithPartitions(3).
+    Build()
+```
+
+**Schema registry** — attach a schema subject for producer-side validation:
+
+```go
+producer, err := client.NewProducer().
+    WithTopic("/default/my-topic").
+    WithName("my-producer").
+    WithSchemaSubject("user-events-value").
+    Build()
+```
+
+## Consumer
+
+Consumers subscribe to topics and receive messages. Four subscription types control how messages are distributed:
+
+| Type | Behavior |
+|------|----------|
+| `Exclusive` | Single consumer, total ordering |
+| `Shared` | Round-robin across consumers |
+| `FailOver` | Active-standby failover |
+| `KeyShared` | Per-key ordering with multi-consumer parallelism |
+
+```go
 consumer, err := client.NewConsumer().
-    WithConsumerName(consumerName).
-    WithTopic(topic).
-    WithSubscription(subscriptionName).
-    WithSubscriptionType(subType).
+    WithTopic("/default/my-topic").
+    WithConsumerName("my-consumer").
+    WithSubscription("my-sub").
+    WithSubscriptionType(danube.KeyShared).
     Build()
-if err != nil {
-    log.Fatalf("Failed to initialize the consumer: %v", err)
-}
 
-// Request to subscribe to the topic and create the resources on the Danube Broker
-if err := consumer.Subscribe(ctx); err != nil {
-    log.Fatalf("Failed to subscribe: %v", err)
-}
-log.Printf("The Consumer %s was created", consumerName)
+consumer.Subscribe(ctx)
+stream, _ := consumer.Receive(ctx)
 
-// Request to receive messages
-stream, err := consumer.Receive(ctx)
-if err != nil {
-    log.Fatalf("Failed to receive messages: %v", err)
-}
-
-// consume the messages from the go channel
 for msg := range stream {
-    fmt.Printf("Received message: %+v\n", string(msg.GetPayload()))
-
-    // Acknowledge the message
-    if _, err := consumer.Ack(ctx, msg); err != nil {
-        log.Fatalf("Failed to acknowledge message: %v", err)
-    }
+    fmt.Println(string(msg.GetPayload()))
+    consumer.Ack(ctx, msg)
 }
+```
+
+**Key filtering** — in Key-Shared mode, receive only messages matching specific routing keys:
+
+```go
+consumer, err := client.NewConsumer().
+    WithTopic("/default/my-topic").
+    WithConsumerName("payments-worker").
+    WithSubscription("orders-sub").
+    WithSubscriptionType(danube.KeyShared).
+    WithKeyFilter("payment").
+    WithKeyFilter("invoice").
+    Build()
+```
+
+**Negative acknowledgement** — reject a message with an optional delay for redelivery:
+
+```go
+consumer.Nack(ctx, msg, &delayMs, &reason)
+```
+
+## Examples
+
+Full working examples are available in the [`examples/`](https://github.com/danube-messaging/danube-go/tree/main/examples) directory:
+
+- **[schema_string](examples/schema_string)** — basic producer/consumer
+- **[schema_json](examples/schema_json)** — JSON schema with registry
+- **[reliable_dispatch](examples/reliable_dispatch)** — at-least-once delivery with acks
+- **[multi_partitions](examples/multi_partitions)** — partitioned topic
+- **[key_shared](examples/key_shared)** — Key-Shared routing, filtering, and producer with routing keys
+
+## Running the Broker
+
+Use the [instructions from the documentation](https://danube-docs.dev-state.com/) to run a Danube broker or cluster.
+
+Quick start with Docker:
+
+```bash
+cd docker/
+docker compose up -d
 ```
 
 ## Contribution
@@ -117,47 +134,39 @@ Working on improving and adding new features. Please feel free to contribute or 
 
 ### Running Integration Tests
 
-Before submitting a PR, start the test cluster and run the integration tests:
-
 ```bash
-# 1. Start the cluster
-cd docker/
-docker compose up -d
+# Start the test broker
+cd docker/ && docker compose up -d
 
-# 2. Wait for the broker to be healthy
+# Wait for healthy status
 docker compose ps
 
-# 3. Run the integration tests from the repository root
-cd ..
-go test ./integration_tests/ -v -count=1
+# Run tests from the repository root
+cd .. && go test ./integration_tests/ -v -count=1
 
-# 4. Stop the cluster when done
-cd docker/
-docker compose down -v
+# Clean up
+cd docker/ && docker compose down -v
 ```
 
-### Use latest DanubeApi.proto and SchemaRegistry.proto files
+### Updating Proto Definitions
 
-Make sure the proto/DanubeApi.proto is the latest from [Danube project](https://github.com/danube-messaging/danube/tree/main/danube-core/proto).
+Ensure `proto/DanubeApi.proto` matches the latest from [danube-core](https://github.com/danube-messaging/danube/tree/main/danube-core/proto). Add the Go package option after `package danube;`:
 
-If not replace the file and add at the top of the file
-
-```bash
+```protobuf
 option go_package = "github.com/danube-messaging/danube-go/proto";
 ```
 
-right after the `package danube;`
-
-In order to generate the Go grpc code you need the following packages installed:
+Generate Go code:
 
 ```bash
 go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
 go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
-```
 
-And generate the Go code from the proto file:
+protoc --proto_path=./proto --go_out=./proto --go-grpc_out=./proto \
+  --go_opt=paths=source_relative --go-grpc_opt=paths=source_relative \
+  proto/DanubeApi.proto
 
-```bash
-protoc --proto_path=./proto --go_out=./proto --go-grpc_out=./proto --go_opt=paths=source_relative --go-grpc_opt=paths=source_relative proto/DanubeApi.proto
-protoc --proto_path=./proto --go_out=./proto --go-grpc_out=./proto --go_opt=paths=source_relative --go-grpc_opt=paths=source_relative proto/SchemaRegistry.proto
+protoc --proto_path=./proto --go_out=./proto --go-grpc_out=./proto \
+  --go_opt=paths=source_relative --go-grpc_opt=paths=source_relative \
+  proto/SchemaRegistry.proto
 ```

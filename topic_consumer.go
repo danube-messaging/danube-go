@@ -19,7 +19,8 @@ type topicConsumer struct {
 	consumerName     string                      // the name assigned to the consumer instance
 	consumerID       uint64                      // the unique identifier of the consumer assigned by the broker after subscription
 	subscription     string                      // the name of the subscription for the consumer
-	subscriptionType SubType                     // the type of subscription (e.g., EXCLUSIVE, SHARED, FAILOVER)
+	subscriptionType SubType                     // the type of subscription (e.g., EXCLUSIVE, SHARED, FAILOVER, KEY_SHARED)
+	keyFilters       []string                    // key filter patterns for KeyShared subscriptions
 	consumerOptions  ConsumerOptions             // configuration options for the consumer
 	requestID        atomic.Uint64               // atomic counter for generating unique request IDs
 	streamClient     proto.ConsumerServiceClient // the gRPC client used to communicate with the consumer service
@@ -34,6 +35,7 @@ func newTopicConsumer(
 	client *DanubeClient,
 	topicName, consumerName, subscription string,
 	subType *SubType,
+	keyFilters []string,
 	options ConsumerOptions,
 ) topicConsumer {
 	var subscriptionType SubType
@@ -51,6 +53,7 @@ func newTopicConsumer(
 		consumerName:     consumerName,
 		subscription:     subscription,
 		subscriptionType: subscriptionType,
+		keyFilters:       keyFilters,
 		consumerOptions:  options,
 		stopSignal:       &atomic.Bool{},
 		brokerAddr:       client.URI,
@@ -114,6 +117,7 @@ func (c *topicConsumer) trySubscribe(ctx context.Context) (uint64, error) {
 		ConsumerName:     c.consumerName,
 		Subscription:     c.subscription,
 		SubscriptionType: proto.ConsumerRequest_SubscriptionType(c.subscriptionType),
+		KeyFilters:       c.keyFilters,
 	}
 
 	ctxWithAuth, err := c.client.authService.attachTokenIfNeeded(ctx, c.connectURL)

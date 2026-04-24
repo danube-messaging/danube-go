@@ -165,7 +165,7 @@ func (p *Producer) Send(ctx context.Context, data []byte, attributes map[string]
 	attempts := 0
 
 	for {
-		requestID, err := p.producers[partitionID].send(ctx, data, attributes)
+		requestID, err := p.producers[partitionID].send(ctx, data, attributes, nil)
 		if err == nil {
 			return requestID, nil
 		}
@@ -201,6 +201,79 @@ func (p *Producer) selectPartition() int32 {
 		return p.messageRouter.roundRobin()
 	}
 	return 0
+}
+
+// selectPartitionForKey selects a partition by hashing the routing key.
+// Ensures all messages with the same key go to the same partition.
+// For non-partitioned topics, returns 0.
+func (p *Producer) selectPartitionForKey(routingKey string) int32 {
+	if p.partitions > 0 && p.messageRouter != nil {
+		return p.messageRouter.keyRoute(routingKey)
+	}
+	return 0
+}
+
+// SendWithKey sends a message with a routing key for Key-Shared subscriptions.
+//
+// For partitioned topics: hashes the routing key to a specific partition,
+// ensuring all messages with the same key go to the same partition's WAL.
+// For non-partitioned topics: simply tags the routing key on the message.
+//
+// All messages with the same routing key are guaranteed to be delivered
+// to the same consumer, in order, within a Key-Shared subscription.
+//
+// Parameters:
+// - ctx: The context for managing request lifecycle and cancellation.
+// - data: The message payload to be sent.
+// - attributes: user-defined properties or attributes associated with the message
+// - routingKey: the routing key for Key-Shared dispatch
+//
+// Returns:
+// - uint64: The sequence ID of the sent message if successful.
+// - error: An error if message sending fails.
+func (p *Producer) SendWithKey(ctx context.Context, data []byte, attributes map[string]string, routingKey string) (uint64, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	partitionID := p.selectPartitionForKey(routingKey)
+
+	if partitionID >= int32(len(p.producers)) {
+		return 0, fmt.Errorf("partition ID out of range")
+	}
+
+	retryManager := newRetryManager(p.producerOptions.MaxRetries, p.producerOptions.BaseBackoffMs, p.producerOptions.MaxBackoffMs)
+	attempts := 0
+
+	for {
+		requestID, err := p.producers[partitionID].send(ctx, data, attributes, &routingKey)
+		if err == nil {
+			return requestID, nil
+		}
+
+		if isUnrecoverable(err) {
+			if err := p.recreateProducer(ctx, partitionID); err != nil {
+				return 0, err
+			}
+			attempts = 0
+			continue
+		}
+
+		if retryManager.isRetryable(err) {
+			attempts++
+			if attempts > retryManager.maxRetriesValue() {
+				if err := p.lookupAndRecreate(ctx, partitionID, err); err != nil {
+					return 0, err
+				}
+				attempts = 0
+				continue
+			}
+			backoff := retryManager.calculateBackoff(attempts - 1)
+			time.Sleep(backoff)
+			continue
+		}
+
+		return 0, err
+	}
 }
 
 func (p *Producer) recreateProducer(ctx context.Context, partitionID int32) error {
