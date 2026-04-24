@@ -140,6 +140,9 @@ func TestKeySharedBasic(t *testing.T) {
 
 // TestKeySharedFiltering verifies that key filters restrict which messages
 // a consumer receives in a Key-Shared subscription.
+//
+// Both consumers use explicit filters so each key has exactly one eligible
+// consumer, making routing deterministic regardless of hash ring layout.
 func TestKeySharedFiltering(t *testing.T) {
 	client := setupClient(t)
 	topic := uniqueTopic("/default/key_shared_filter")
@@ -158,49 +161,52 @@ func TestKeySharedFiltering(t *testing.T) {
 		t.Fatalf("failed to create producer: %v", err)
 	}
 
-	// Consumer with key filter: only receives "payment" keys
-	filteredConsumer, err := client.NewConsumer().
+	// Consumer A: only receives "payment" keys
+	consumerA, err := client.NewConsumer().
 		WithTopic(topic).
-		WithConsumerName("cons_ks_filtered").
+		WithConsumerName("cons_ks_payments").
 		WithSubscription("ks_sub_filter").
 		WithSubscriptionType(danube.KeyShared).
 		WithKeyFilter("payment").
 		Build()
 	if err != nil {
-		t.Fatalf("failed to build filtered consumer: %v", err)
+		t.Fatalf("failed to build consumer A: %v", err)
 	}
-	if err := filteredConsumer.Subscribe(ctx); err != nil {
-		t.Fatalf("failed to subscribe filtered consumer: %v", err)
+	if err := consumerA.Subscribe(ctx); err != nil {
+		t.Fatalf("failed to subscribe consumer A: %v", err)
 	}
-	defer filteredConsumer.Close()
+	defer consumerA.Close()
 
-	// Second consumer with no filter: gets everything else
-	catchAllConsumer, err := client.NewConsumer().
+	// Consumer B: receives "ship*" and "invoice" keys
+	consumerB, err := client.NewConsumer().
 		WithTopic(topic).
-		WithConsumerName("cons_ks_catchall").
+		WithConsumerName("cons_ks_logistics").
 		WithSubscription("ks_sub_filter").
 		WithSubscriptionType(danube.KeyShared).
+		WithKeyFilter("ship*").
+		WithKeyFilter("invoice").
 		Build()
 	if err != nil {
-		t.Fatalf("failed to build catch-all consumer: %v", err)
+		t.Fatalf("failed to build consumer B: %v", err)
 	}
-	if err := catchAllConsumer.Subscribe(ctx); err != nil {
-		t.Fatalf("failed to subscribe catch-all consumer: %v", err)
+	if err := consumerB.Subscribe(ctx); err != nil {
+		t.Fatalf("failed to subscribe consumer B: %v", err)
 	}
-	defer catchAllConsumer.Close()
+	defer consumerB.Close()
 
-	filteredChan, err := filteredConsumer.Receive(ctx)
+	chanA, err := consumerA.Receive(ctx)
 	if err != nil {
-		t.Fatalf("failed to receive filtered: %v", err)
+		t.Fatalf("failed to receive consumer A: %v", err)
 	}
-	catchAllChan, err := catchAllConsumer.Receive(ctx)
+	chanB, err := consumerB.Receive(ctx)
 	if err != nil {
-		t.Fatalf("failed to receive catch-all: %v", err)
+		t.Fatalf("failed to receive consumer B: %v", err)
 	}
 
 	time.Sleep(500 * time.Millisecond)
 
 	// Send messages with different keys
+	// "payment" → only A eligible, "shipping"/"invoice" → only B eligible
 	keys := []string{"payment", "shipping", "payment", "invoice", "payment"}
 	for i, key := range keys {
 		payload := fmt.Sprintf("event-%d-%s", i, key)
@@ -211,35 +217,33 @@ func TestKeySharedFiltering(t *testing.T) {
 
 	// Collect all messages, acking inline to unblock per-key dispatch
 	var mu sync.Mutex
-	var filteredKeys []string
+	var keysOnA []string
+	var keysOnB []string
 	var allCount int
 	deadline := time.After(15 * time.Second)
 
 	for allCount < len(keys) {
 		select {
-		case msg, ok := <-filteredChan:
+		case msg, ok := <-chanA:
 			if !ok {
-				t.Fatalf("filtered channel closed after %d messages", allCount)
+				t.Fatalf("channel A closed after %d messages", allCount)
 			}
-			if _, err := filteredConsumer.Ack(ctx, msg); err != nil {
-				t.Fatalf("failed to ack on filtered consumer: %v", err)
+			if _, err := consumerA.Ack(ctx, msg); err != nil {
+				t.Fatalf("failed to ack on consumer A: %v", err)
 			}
 			mu.Lock()
-			filteredKeys = append(filteredKeys, msg.GetRoutingKey())
+			keysOnA = append(keysOnA, msg.GetRoutingKey())
 			allCount++
 			mu.Unlock()
-		case msg, ok := <-catchAllChan:
+		case msg, ok := <-chanB:
 			if !ok {
-				t.Fatalf("catch-all channel closed after %d messages", allCount)
+				t.Fatalf("channel B closed after %d messages", allCount)
 			}
-			if _, err := catchAllConsumer.Ack(ctx, msg); err != nil {
-				t.Fatalf("failed to ack on catch-all consumer: %v", err)
-			}
-			key := msg.GetRoutingKey()
-			if key == "payment" {
-				t.Fatalf("catch-all consumer received 'payment' key — should have gone to filtered consumer")
+			if _, err := consumerB.Ack(ctx, msg); err != nil {
+				t.Fatalf("failed to ack on consumer B: %v", err)
 			}
 			mu.Lock()
+			keysOnB = append(keysOnB, msg.GetRoutingKey())
 			allCount++
 			mu.Unlock()
 		case <-deadline:
@@ -247,17 +251,27 @@ func TestKeySharedFiltering(t *testing.T) {
 		}
 	}
 
-	// Verify: filtered consumer should only have "payment" messages
-	for _, k := range filteredKeys {
+	// Verify: consumer A should only have "payment" keys
+	for _, k := range keysOnA {
 		if k != "payment" {
-			t.Fatalf("filtered consumer received key %q, expected only 'payment'", k)
+			t.Fatalf("consumer A (filter: payment) received key %q", k)
 		}
 	}
 
-	// We sent 3 "payment" messages
-	if len(filteredKeys) != 3 {
-		t.Fatalf("expected 3 payment messages on filtered consumer, got %d", len(filteredKeys))
+	// Verify: consumer B should only have "shipping" or "invoice" keys
+	for _, k := range keysOnB {
+		if k != "shipping" && k != "invoice" {
+			t.Fatalf("consumer B (filter: ship*, invoice) received key %q", k)
+		}
 	}
 
-	t.Logf("Key-Shared filtering test passed: filtered consumer got %d/3 payment messages", len(filteredKeys))
+	// We sent 3 "payment" + 1 "shipping" + 1 "invoice"
+	if len(keysOnA) != 3 {
+		t.Fatalf("expected 3 messages on consumer A, got %d", len(keysOnA))
+	}
+	if len(keysOnB) != 2 {
+		t.Fatalf("expected 2 messages on consumer B, got %d", len(keysOnB))
+	}
+
+	t.Logf("Key-Shared filtering test passed: A got %d payment, B got %d logistics", len(keysOnA), len(keysOnB))
 }
