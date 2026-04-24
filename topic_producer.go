@@ -174,7 +174,7 @@ func (p *topicProducer) lookupNewBroker(ctx context.Context) {
 // Returns:
 // - uint64: The sequence ID of the sent message if successful.
 // - error: An error if message sending fail
-func (p *topicProducer) send(ctx context.Context, data []byte, attributes map[string]string) (uint64, error) {
+func (p *topicProducer) send(ctx context.Context, data []byte, attributes map[string]string, routingKey *string) (uint64, error) {
 	if p.streamClient == nil {
 		return 0, unrecoverableError("Send: producer is not connected")
 	}
@@ -201,6 +201,7 @@ func (p *topicProducer) send(ctx context.Context, data []byte, attributes map[st
 		Attributes:       attributes,
 		SchemaId:         p.schemaID,
 		SchemaVersion:    p.schemaVersion,
+		RoutingKey:       routingKey,
 	}
 
 	ctxWithAuth, err := p.client.authService.attachTokenIfNeeded(ctx, p.connectURL)

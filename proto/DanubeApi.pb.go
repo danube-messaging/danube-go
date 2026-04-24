@@ -119,6 +119,7 @@ const (
 	ConsumerRequest_Exclusive ConsumerRequest_SubscriptionType = 0 // Only one consumer can subscribe to the topic at a time.
 	ConsumerRequest_Shared    ConsumerRequest_SubscriptionType = 1 // Multiple consumers can subscribe to the topic concurrently.
 	ConsumerRequest_Failover  ConsumerRequest_SubscriptionType = 2 // Only one consumer (the active consumer) receives messages at any given time.
+	ConsumerRequest_KeyShared ConsumerRequest_SubscriptionType = 3 // Messages with same routing key always go to the same consumer, in order.
 )
 
 // Enum value maps for ConsumerRequest_SubscriptionType.
@@ -127,11 +128,13 @@ var (
 		0: "Exclusive",
 		1: "Shared",
 		2: "Failover",
+		3: "KeyShared",
 	}
 	ConsumerRequest_SubscriptionType_value = map[string]int32{
 		"Exclusive": 0,
 		"Shared":    1,
 		"Failover":  2,
+		"KeyShared": 3,
 	}
 )
 
@@ -609,8 +612,12 @@ type ConsumerRequest struct {
 	ConsumerName     string                           `protobuf:"bytes,3,opt,name=consumer_name,json=consumerName,proto3" json:"consumer_name,omitempty"`
 	Subscription     string                           `protobuf:"bytes,4,opt,name=subscription,proto3" json:"subscription,omitempty"`
 	SubscriptionType ConsumerRequest_SubscriptionType `protobuf:"varint,5,opt,name=subscription_type,json=subscriptionType,proto3,enum=danube.ConsumerRequest_SubscriptionType" json:"subscription_type,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// Glob patterns for key-based filtering (optional, KeyShared only).
+	// Examples: "user-*", "eu-west-?", "orders-premium-*"
+	// Empty = accept all keys from hash ring assignment.
+	KeyFilters    []string `protobuf:"bytes,6,rep,name=key_filters,json=keyFilters,proto3" json:"key_filters,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ConsumerRequest) Reset() {
@@ -676,6 +683,13 @@ func (x *ConsumerRequest) GetSubscriptionType() ConsumerRequest_SubscriptionType
 		return x.SubscriptionType
 	}
 	return ConsumerRequest_Exclusive
+}
+
+func (x *ConsumerRequest) GetKeyFilters() []string {
+	if x != nil {
+		return x.KeyFilters
+	}
+	return nil
 }
 
 // Create Consumer response
@@ -811,6 +825,9 @@ type StreamMessage struct {
 	// NEW: Schema identification for registry-based schemas
 	SchemaId      *uint64 `protobuf:"varint,8,opt,name=schema_id,json=schemaId,proto3,oneof" json:"schema_id,omitempty"`                // Global schema ID from registry
 	SchemaVersion *uint32 `protobuf:"varint,9,opt,name=schema_version,json=schemaVersion,proto3,oneof" json:"schema_version,omitempty"` // Schema version number
+	// Routing key for Key-Shared dispatch. Set by producer via send_with_key().
+	// Carried through to consumers for application-level use.
+	RoutingKey    *string `protobuf:"bytes,10,opt,name=routing_key,json=routingKey,proto3,oneof" json:"routing_key,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -906,6 +923,13 @@ func (x *StreamMessage) GetSchemaVersion() uint32 {
 		return *x.SchemaVersion
 	}
 	return 0
+}
+
+func (x *StreamMessage) GetRoutingKey() string {
+	if x != nil && x.RoutingKey != nil {
+		return *x.RoutingKey
+	}
+	return ""
 }
 
 // Unique ID of the message
@@ -1524,7 +1548,7 @@ const file_DanubeApi_proto_rawDesc = "" +
 	"\rproducer_name\x18\x03 \x01(\tR\fproducerName\"0\n" +
 	"\x0fMessageResponse\x12\x1d\n" +
 	"\n" +
-	"request_id\x18\x01 \x01(\x04R\trequestId\"\xac\x02\n" +
+	"request_id\x18\x01 \x01(\x04R\trequestId\"\xdc\x02\n" +
 	"\x0fConsumerRequest\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\x04R\trequestId\x12\x1d\n" +
@@ -1532,12 +1556,15 @@ const file_DanubeApi_proto_rawDesc = "" +
 	"topic_name\x18\x02 \x01(\tR\ttopicName\x12#\n" +
 	"\rconsumer_name\x18\x03 \x01(\tR\fconsumerName\x12\"\n" +
 	"\fsubscription\x18\x04 \x01(\tR\fsubscription\x12U\n" +
-	"\x11subscription_type\x18\x05 \x01(\x0e2(.danube.ConsumerRequest.SubscriptionTypeR\x10subscriptionType\";\n" +
+	"\x11subscription_type\x18\x05 \x01(\x0e2(.danube.ConsumerRequest.SubscriptionTypeR\x10subscriptionType\x12\x1f\n" +
+	"\vkey_filters\x18\x06 \x03(\tR\n" +
+	"keyFilters\"J\n" +
 	"\x10SubscriptionType\x12\r\n" +
 	"\tExclusive\x10\x00\x12\n" +
 	"\n" +
 	"\x06Shared\x10\x01\x12\f\n" +
-	"\bFailover\x10\x02\"w\n" +
+	"\bFailover\x10\x02\x12\r\n" +
+	"\tKeyShared\x10\x03\"w\n" +
 	"\x10ConsumerResponse\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\x04R\trequestId\x12\x1f\n" +
@@ -1548,7 +1575,7 @@ const file_DanubeApi_proto_rawDesc = "" +
 	"\n" +
 	"request_id\x18\x01 \x01(\x04R\trequestId\x12\x1f\n" +
 	"\vconsumer_id\x18\x02 \x01(\x04R\n" +
-	"consumerId\"\xd8\x03\n" +
+	"consumerId\"\x8e\x04\n" +
 	"\rStreamMessage\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\x04R\trequestId\x12$\n" +
@@ -1561,13 +1588,17 @@ const file_DanubeApi_proto_rawDesc = "" +
 	"attributes\x18\a \x03(\v2%.danube.StreamMessage.AttributesEntryR\n" +
 	"attributes\x12 \n" +
 	"\tschema_id\x18\b \x01(\x04H\x00R\bschemaId\x88\x01\x01\x12*\n" +
-	"\x0eschema_version\x18\t \x01(\rH\x01R\rschemaVersion\x88\x01\x01\x1a=\n" +
+	"\x0eschema_version\x18\t \x01(\rH\x01R\rschemaVersion\x88\x01\x01\x12$\n" +
+	"\vrouting_key\x18\n" +
+	" \x01(\tH\x02R\n" +
+	"routingKey\x88\x01\x01\x1a=\n" +
 	"\x0fAttributesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01B\f\n" +
 	"\n" +
 	"_schema_idB\x11\n" +
-	"\x0f_schema_version\"\x8b\x01\n" +
+	"\x0f_schema_versionB\x0e\n" +
+	"\f_routing_key\"\x8b\x01\n" +
 	"\x05MsgID\x12\x1f\n" +
 	"\vproducer_id\x18\x01 \x01(\x04R\n" +
 	"producerId\x12\x1d\n" +

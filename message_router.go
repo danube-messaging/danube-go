@@ -26,3 +26,20 @@ func (router *messageRouter) roundRobin() int32 {
 
 	return next
 }
+
+// keyRoute routes by hashing the routing key to a deterministic partition.
+// Ensures all messages with the same key always go to the same partition,
+// which is required for per-key ordering on partitioned Key-Shared topics.
+func (router *messageRouter) keyRoute(routingKey string) int32 {
+	hash := fnv1aHash(routingKey)
+	return int32(hash % uint64(router.partitions))
+}
+
+func fnv1aHash(key string) uint64 {
+	var hash uint64 = 0xcbf29ce484222325
+	for i := 0; i < len(key); i++ {
+		hash ^= uint64(key[i])
+		hash *= 0x100000001b3
+	}
+	return hash
+}
